@@ -9,8 +9,8 @@ export no_proxy=localhost,127.0.0.1
 export GOOGLE_API_KEY="YOUR_GOOGLE_API_KEY_HERE"
 
 MODE="${1:-daily}"
-SCRIPT_DIR="$HOME/.openclaw/extensions/mem0-mcp"
-LOG_DIR="$HOME/.openclaw/logs"
+SCRIPT_DIR="$HOME/.mem0-gateway/extensions/mem0-mcp"
+LOG_DIR="$HOME/.mem0-gateway/logs"
 mkdir -p "$LOG_DIR"
 
 echo "[$(date)] Starting $MODE maintenance" >> "$LOG_DIR/maintenance.log"

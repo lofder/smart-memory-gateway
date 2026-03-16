@@ -83,7 +83,7 @@ embedding:
 qdrant:
   host: localhost
   port: 6333
-  collection: openclaw_memories
+  collection: memories
 
 decay:
   task_log_half_life_days: 30

@@ -26,11 +26,11 @@ from mcp.server.fastmcp import FastMCP
 from qdrant_client import QdrantClient
 
 CONFIG_PATH = Path(__file__).parent / "config.yaml"
-OPENCLAW_PATH = Path.home() / ".openclaw" / "openclaw.json"
-WRITE_QUEUE_PATH = Path.home() / ".openclaw" / "mem0" / "write_queue.jsonl"
+HOST_CONFIG_PATH = Path.home() / ".mem0-gateway" / "config.json"
+WRITE_QUEUE_PATH = Path.home() / ".mem0-gateway" / "mem0" / "write_queue.jsonl"
 ENV_PATHS = [
-    Path.home() / ".openclaw" / ".env",
-    Path.home() / ".openclaw" / ".env.main",
+    Path.home() / ".mem0-gateway" / ".env",
+    Path.home() / ".mem0-gateway" / ".env.main",
 ]
 ENV_PLACEHOLDER_RE = re.compile(r"^\$\{([^}]+)\}$")
 
@@ -135,7 +135,7 @@ def _init_backends():
     try:
         from mem0 import Memory
         _load_env_layers()
-        oc = json.load(open(OPENCLAW_PATH))
+        oc = json.load(open(HOST_CONFIG_PATH))
         emb_primary = CFG["embedding"]["primary"]
         emb_fallback = CFG["embedding"]["fallback"]
         q_cfg = CFG["qdrant"]
@@ -190,7 +190,7 @@ def _init_backends():
 
 threading.Thread(target=_init_backends, daemon=True).start()
 
-mcp = FastMCP("mem0-openclaw")
+mcp = FastMCP("mem0-gateway")
 
 
 def _get_backends():
@@ -216,7 +216,7 @@ def _point_to_memory_item(point):
     }
 
 
-def _load_all_memories_from_qdrant(qc, user_id="main", scope="", include_archived=True):
+def _load_all_memories_from_qdrant(qc, user_id="default", scope="", include_archived=True):
     collection = CFG["qdrant"]["collection"]
     offset = None
     items = []
@@ -286,7 +286,7 @@ def _check_never_store(content: str) -> str | None:
 
 def _do_search(mem, query, filters, limit):
     try:
-        results = mem.search(query, user_id="main", limit=limit, filters=filters or None)
+        results = mem.search(query, user_id="default", limit=limit, filters=filters or None)
         items = results if isinstance(results, list) else results.get("results", [])
         return items
     except Exception:
@@ -319,7 +319,7 @@ def _replay_write_queue(mem):
             continue
         try:
             entry = json.loads(line)
-            mem.add(entry["content"], user_id="main", metadata=entry["metadata"])
+            mem.add(entry["content"], user_id="default", metadata=entry["metadata"])
             replayed += 1
         except Exception:
             remaining.append(line)
@@ -347,7 +347,7 @@ def _bump_access_count(qc, collection, ids):
 @mcp.tool()
 def mem0_add(content: str, scope: str = "", context: str = "",
              source: str = "agent_output", trust: str = "medium",
-             mem_type: str = "", agent: str = "main") -> str:
+             mem_type: str = "", agent: str = "default") -> str:
     """Add a memory with structured provenance and scope isolation."""
     if not scope:
         return json.dumps({"error": "scope is required. Use global/group:oc_xxx/dm/agent:xxx"})
@@ -387,7 +387,7 @@ def mem0_add(content: str, scope: str = "", context: str = "",
 
     try:
         _replay_write_queue(mem)
-        result = mem.add(content, user_id="main", metadata=metadata, infer=False)
+        result = mem.add(content, user_id="default", metadata=metadata, infer=False)
         return json.dumps(result, default=str, ensure_ascii=False)
     except Exception as e:
         write_id = str(uuid.uuid4())
@@ -399,7 +399,7 @@ def mem0_add(content: str, scope: str = "", context: str = "",
 
 @mcp.tool()
 def mem0_search(query: str, scope: str = "global", mem_type: str = "",
-                trust_min: str = "", limit: int = 5, agent: str = "main") -> str:
+                trust_min: str = "", limit: int = 5, agent: str = "default") -> str:
     """Search memories with scope isolation and dual-query merge."""
     perm_err = _check_permission(agent, "read", scope, "")
     if perm_err:
@@ -449,7 +449,7 @@ def mem0_search(query: str, scope: str = "global", mem_type: str = "",
 
 
 @mcp.tool()
-def mem0_get_all(user_id: str = "main", scope: str = "", agent: str = "main") -> str:
+def mem0_get_all(user_id: str = "default", scope: str = "", agent: str = "default") -> str:
     """Get all memories, optionally filtered by scope."""
     mem, qc = _get_backends()
     if mem is None and qc is None:
@@ -470,7 +470,7 @@ def mem0_get_all(user_id: str = "main", scope: str = "", agent: str = "main") ->
 
 
 @mcp.tool()
-def mem0_status(agent: str = "main") -> str:
+def mem0_status(agent: str = "default") -> str:
     """Health check: total memories, scope/type distribution, Qdrant status."""
     mem, qc = _get_backends()
     status = {
@@ -484,12 +484,12 @@ def mem0_status(agent: str = "main") -> str:
     try:
         sdk_count = None
         if mem is not None:
-            all_mem = mem.get_all(user_id="main")
+            all_mem = mem.get_all(user_id="default")
             sdk_items = all_mem if isinstance(all_mem, list) else all_mem.get("results", [])
             sdk_count = len(sdk_items)
 
         if qc is not None:
-            items = _load_all_memories_from_qdrant(qc, user_id="main", include_archived=True)
+            items = _load_all_memories_from_qdrant(qc, user_id="default", include_archived=True)
             status["inventory_source"] = "qdrant_scroll"
         else:
             items = sdk_items
@@ -531,7 +531,7 @@ def mem0_status(agent: str = "main") -> str:
 
 
 @mcp.tool()
-def mem0_maintenance(mode: str = "daily", agent: str = "main") -> str:
+def mem0_maintenance(mode: str = "daily", agent: str = "default") -> str:
     """Run memory maintenance. mode: daily/weekly/report_only.
     daily: Opus re-extract today's memories + dedup + report.
     weekly: daily + consolidation + conflict detection + decay + timeline.
@@ -567,7 +567,7 @@ def mem0_maintenance(mode: str = "daily", agent: str = "main") -> str:
                 msg += f"触发者: {agent}\n"
                 msg += json.dumps(report, ensure_ascii=False, indent=2, default=str)[:1500]
                 subprocess.run(
-                    ["openclaw", "message", "send", "--text", msg],
+                    ["echo", msg]  # Replace with your notification command,
                     timeout=15, capture_output=True,
                     env={**os.environ, "PATH": "/usr/local/bin:" + os.environ.get("PATH", "")}
                 )

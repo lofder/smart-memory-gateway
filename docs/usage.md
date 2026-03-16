@@ -50,7 +50,7 @@ mcp(action="call", server="mem0", tool="mem0_maintenance", args={
 | `global` | Shared across all contexts / 全局共享 | Everywhere / 所有地方 |
 | `group:ID` | Group-chat specific / 群聊专属 | That group + global / 该群 + 全局 |
 | `dm` | Direct message only / 仅私聊 | DM context / 私聊上下文 |
-| `agent:NAME` | Worker-private SOP / Worker 私有 SOP | Main agent / Main agent |
+| `agent:NAME` | Worker-private SOP / Worker 私有 SOP | primary agent / primary agent |
 | `all` | Search-only: no filter / 搜索专用：无过滤 | Main DM only / 仅 Main 私聊 |
 | `cross:ID` | Search-only: reference another group / 搜索专用：引用其他群 | Main only / 仅 Main |
 
@@ -104,4 +104,4 @@ python src/maintenance.py --mode daily
 python src/maintenance.py --mode report_only
 ```
 
-Or ask your Main agent: "run memory maintenance" / 或跟 Main agent 说"跑一下记忆维护"
+Or ask your primary agent: "run memory maintenance" / 或跟 primary agent 说"跑一下记忆维护"

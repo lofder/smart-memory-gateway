@@ -24,12 +24,12 @@ from mem0 import Memory
 from qdrant_client import QdrantClient
 
 CONFIG_PATH = Path(__file__).parent / "config.yaml"
-OPENCLAW_PATH = Path.home() / ".openclaw" / "openclaw.json"
-PLAN_DIR = Path.home() / ".openclaw" / "mem0" / "maintenance_plans"
-REPORT_DIR = Path.home() / ".openclaw" / "mem0" / "maintenance_reports"
+HOST_CONFIG_PATH = Path.home() / ".mem0-gateway" / "config.json"
+PLAN_DIR = Path.home() / ".mem0-gateway" / "mem0" / "maintenance_plans"
+REPORT_DIR = Path.home() / ".mem0-gateway" / "mem0" / "maintenance_reports"
 ENV_PATHS = [
-    Path.home() / ".openclaw" / ".env",
-    Path.home() / ".openclaw" / ".env.main",
+    Path.home() / ".mem0-gateway" / ".env",
+    Path.home() / ".mem0-gateway" / ".env.main",
 ]
 ENV_PLACEHOLDER_RE = re.compile(r"^\$\{([^}]+)\}$")
 
@@ -153,7 +153,7 @@ def _make_memory_with_embedder_fallback(oc, llm_config):
 def _make_opus_memory():
     """Create Memory instance with Opus LLM for high-quality extraction."""
     _load_env_layers()
-    oc = json.load(open(OPENCLAW_PATH))
+    oc = json.load(open(HOST_CONFIG_PATH))
     llm_chain = CFG.get("maintenance", {}).get("llm_chain", [])
     model = llm_chain[0] if llm_chain else "claude-opus-4-6"
     model_name = model.split("/")[-1] if "/" in model else model
@@ -226,7 +226,7 @@ def _point_to_memory_item(point):
     }
 
 
-def _load_all_memories_from_qdrant(qc, user_id="main", scope="", include_archived=True):
+def _load_all_memories_from_qdrant(qc, user_id="default", scope="", include_archived=True):
     collection = CFG["qdrant"]["collection"]
     offset = None
     items = []
@@ -256,7 +256,7 @@ def _load_all_memories_from_qdrant(qc, user_id="main", scope="", include_archive
     return items
 
 
-def get_all_memories(m, qc=None, user_id="main", scope="", include_archived=True):
+def get_all_memories(m, qc=None, user_id="default", scope="", include_archived=True):
     if qc is not None:
         return _load_all_memories_from_qdrant(qc, user_id=user_id, scope=scope, include_archived=include_archived)
 
@@ -294,7 +294,7 @@ def step_opus_reextract(opus_mem, memories, report):
             if not content or not mid:
                 continue
             opus_mem.delete(mid)
-            opus_mem.add(content, user_id="main", metadata=metadata)
+            opus_mem.add(content, user_id="default", metadata=metadata)
             ok += 1
         except Exception as e:
             fail += 1
@@ -316,7 +316,7 @@ def step_dedup(m, qc, memories, report):
         scope_mems = [m2 for m2 in memories if m2.get("metadata", {}).get("scope") == scope and not m2.get("metadata", {}).get("archived")]
         seen_pairs = set()
         for mem in scope_mems:
-            similar = m.search(mem.get("memory", ""), user_id="main", filters={"scope": scope}, limit=5)
+            similar = m.search(mem.get("memory", ""), user_id="default", filters={"scope": scope}, limit=5)
             items = similar if isinstance(similar, list) else similar.get("results", [])
             for item in items:
                 if item.get("id") == mem.get("id"):
@@ -376,7 +376,7 @@ def step_consolidation(m, qc, memories, llm_call, report):
             result = consolidate_group(group, llm_call, scope)
             if result:
                 try:
-                    new_mem = m.add(result["content"], user_id="main", metadata={
+                    new_mem = m.add(result["content"], user_id="default", metadata={
                         "scope": scope, "mem_type": "knowledge", "source": "consolidation",
                         "trust": "medium", "agent": "maintenance",
                         "consolidated_from": json.dumps(result.get("consolidated_from", [])),
@@ -470,7 +470,7 @@ def send_feishu_report(report):
 
     try:
         env = {**os.environ, "PATH": "/usr/local/bin:" + os.environ.get("PATH", "")}
-        subprocess.run(["openclaw", "message", "send", "--text", msg[:2000]], timeout=15, capture_output=True, env=env)
+        subprocess.run(["echo", "--text", msg[:2000]], timeout=15, capture_output=True, env=env)
     except Exception:
         pass
 
@@ -485,7 +485,7 @@ def run(mode="daily"):
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
     _load_env_layers()
-    oc = json.load(open(OPENCLAW_PATH))
+    oc = json.load(open(HOST_CONFIG_PATH))
     qc = QdrantClient(host=CFG["qdrant"]["host"], port=CFG["qdrant"]["port"])
 
     if mode == "report_only":

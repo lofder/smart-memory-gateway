@@ -14,7 +14,7 @@
 ### 架构总览
 
 ```
-L1 Working Memory (OpenClaw session context, 5min TTL)
+L1 Working Memory (host framework session context, 5min TTL)
     ↓ 搜索注入
 L2 Smart Memory Gateway (Mem0 + Qdrant Server, 本文档)
     ↓ 归档衰减
@@ -32,7 +32,7 @@ L3 File Archive (daily logs, cold storage)
 
 **谁读谁写：**
 - Main: 读全部 scope + 写 global/group/dm
-- DevOps: 读写 global 的 procedure/lesson
+- ops agent: 读写 global 的 procedure/lesson
 - Worker agents: 写自己域的 procedure/task_log（`scope="agent:{name}"`），偏好从 Main 指令获取
 
 **绝对不存：** 密码、API key、token、cookie 明文
@@ -47,14 +47,14 @@ L3 File Archive (daily logs, cold storage)
 |------|------|------|-----------|
 | Qdrant Server | 1.17.0 | 向量存储 + 过滤 | localhost:6333 |
 | Mem0 | 1.0.5 | 记忆管理（add/search/get_all） | Python library |
-| MCP Server (FastMCP) | v3 | 工具注册 + 权限校验 + 降级 | stdio (OpenClaw 插件) |
+| MCP Server (FastMCP) | v3 | 工具注册 + 权限校验 + 降级 | stdio (host framework 插件) |
 | 认知引擎 | v1 | 衰减/分类/巩固/冲突检测 | Python modules |
 | 维护脚本 | v1 | 每日/每周自动维护 | cron |
 | Gemini Embedding | 001 | MTEB #1 embedding 模型 | Google API (VPN) / lingyun 备选 |
 
 ### Scope 隔离模型
 
-所有记忆统一 `user_id="main"`，通过 `metadata.scope` 实现多租户隔离：
+所有记忆统一 `user_id="default"`，通过 `metadata.scope` 实现多租户隔离：
 
 | scope | 含义 | 示例 |
 |-------|------|------|
@@ -232,7 +232,7 @@ divisor = 1 + min(log(1 + access_count), 3.0)
 ### 备份
 
 - 每日 02:30 Qdrant snapshot（cron 自动，保留 7 天）
-- 路径：`~/.openclaw/mem0/backups/`
+- 路径：`~/.mem0-gateway/mem0/backups/`
 
 ---
 
@@ -245,7 +245,7 @@ divisor = 1 + min(log(1 + access_count), 3.0)
 | MCP 连接超时 | NO_PROXY 未设置 | 检查环境变量 | 加 `NO_PROXY=localhost,127.0.0.1` |
 | Qdrant 不可达 | Server 宕机 | `curl localhost:6333` | `launchctl kickstart` |
 | 去重漏了 | 阈值太高 | 检查相似度分布 | 调 dedup_auto_threshold |
-| Gateway 崩溃循环 | openclaw.json 有无效 key | `openclaw config validate` | 删无效 key |
+| Gateway crash loop | config.json 有无效 key | `config validate` | 删无效 key |
 | 记忆泄漏（跨群） | scope 过滤失败 | 跑隔离测试 | 检查 scope 字段 |
 | args 参数不传 | 用了 params/arguments 而非 args | 检查 MCP 调用格式 | 改为 `args={...}` |
 
@@ -256,7 +256,7 @@ divisor = 1 + min(log(1 + access_count), 3.0)
 ### A. 文件清单
 
 ```
-~/.openclaw/extensions/mem0-mcp/
+~/.mem0-gateway/extensions/mem0-mcp/
   server.py          # MCP Server v3 (FastMCP)
   server.py.bak      # 旧版备份
   config.yaml        # 权限/衰减/维护配置
@@ -269,18 +269,18 @@ divisor = 1 + min(log(1 + access_count), 3.0)
     consolidation.py # 巩固引擎
     conflict.py      # 冲突检测
 
-~/.openclaw/qdrant/
+~/.mem0-gateway/qdrant/
   qdrant             # 二进制
   config.yaml        # Qdrant 配置
 
-~/.openclaw/mem0/
+~/.mem0-gateway/mem0/
   qdrant_server_data/ # Qdrant 数据
   backups/            # 每日快照
   maintenance_plans/  # 维护计划
   maintenance_reports/# 维护报告
   write_queue.jsonl   # 降级写入队列
 
-~/.openclaw/scripts/
+~/.mem0-gateway/scripts/
   run-maintenance.sh  # 维护 wrapper
   mem0-backup.sh      # 备份脚本
 ```
@@ -302,4 +302,4 @@ LLM:
 |------|------|
 | 2026-03-14 | v3 上线：Mem0 + Qdrant Server + scope 隔离 + 认知引擎 |
 | 2026-03-14 | 原生 memorySearch 关闭 |
-| 2026-03-14 | Monitor agent 删除（心跳堵塞 Main 队列） |
+| 2026-03-14 | monitor agent 删除（心跳堵塞 Main 队列） |

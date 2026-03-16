@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Memory migration script: OpenClaw .md files -> Mem0 + Qdrant Server.
-记忆迁移脚本：将 OpenClaw .md 文件迁移到 Mem0 + Qdrant Server。
+"""Memory migration script: markdown memory files -> Mem0 + Qdrant Server.
+记忆迁移脚本：将 markdown 记忆文件迁移到 Mem0 + Qdrant Server。
 
 Usage / 用法:
     python3 migrate.py --dry-run              # Preview only / 仅预览
@@ -14,8 +14,8 @@ from datetime import datetime
 os.environ.setdefault("NO_PROXY", "localhost,127.0.0.1")
 os.environ.setdefault("no_proxy", "localhost,127.0.0.1")
 
-WORKSPACE = Path.home() / ".openclaw" / "workspace-external"
-WORKSPACE_OLD = Path.home() / ".openclaw" / "workspace" / "memory"
+WORKSPACE = Path.home() / ".mem0-gateway" / "workspace"
+WORKSPACE_OLD = Path.home() / ".mem0-gateway" / "workspace-legacy" / "memory"
 
 SCOPE_RULES = {
     "lessons-learned.md": ("lesson", "global"),
@@ -85,7 +85,7 @@ def scan_files() -> list:
     """Scan all memory files and produce migration records."""
     records = []
     agents_dirs = [
-        ("main", WORKSPACE / "main" / "memory"),
+        ("default", WORKSPACE / "default" / "memory"),
         ("devops", WORKSPACE / "devops" / "memory"),
         ("monitor", WORKSPACE / "monitor" / "memory"),
         ("creator", WORKSPACE / "creator" / "memory"),
@@ -164,10 +164,10 @@ def execute(records, limit=None):
     """Write records to Mem0."""
     from mem0 import Memory
 
-    oc = json.load(open(Path.home() / ".openclaw" / "openclaw.json"))
+    oc = json.load(open(Path.home() / ".mem0-gateway" / "config.json"))
     config = {
         "vector_store": {"provider": "qdrant", "config": {
-            "collection_name": "openclaw_memories",
+            "collection_name": "memories",
             "host": "localhost", "port": 6333,
         }},
         "llm": {"provider": "openai", "config": {
@@ -193,7 +193,7 @@ def execute(records, limit=None):
     ok, fail, skip = 0, 0, 0
     for i, r in enumerate(records):
         try:
-            existing = qc.scroll("openclaw_memories", scroll_filter=Filter(
+            existing = qc.scroll("memories", scroll_filter=Filter(
                 must=[FieldCondition(key="migration_id", match=MatchValue(value=r["migration_id"]))]
             ), limit=1)
             if existing[0]:
@@ -218,7 +218,7 @@ def execute(records, limit=None):
             "schema_version": 1,
         }
         try:
-            result = m.add(r["content"], user_id="main", metadata=metadata)
+            result = m.add(r["content"], user_id="default", metadata=metadata)
             ok += 1
             if (i + 1) % 10 == 0:
                 print(f"  [{i+1}/{len(records)}] OK: {r['mem_type']}/{r['scope']} - {r['content'][:50]}...")
@@ -228,7 +228,7 @@ def execute(records, limit=None):
         time.sleep(0.5)
 
     print(f"\nDone: {ok} OK, {fail} FAIL, {skip} SKIP")
-    total = m.get_all(user_id="main")
+    total = m.get_all(user_id="default")
     items = total if isinstance(total, list) else total.get("results", [])
     print(f"Total memories in Mem0: {len(items)}")
 
