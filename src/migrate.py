@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Memory migration script: OpenClaw .md files -> Mem0 + Qdrant Server.
+记忆迁移脚本：将 OpenClaw .md 文件迁移到 Mem0 + Qdrant Server。
 
-Usage:
-    python3 migrate.py --dry-run          # Preview only
-    python3 migrate.py --execute --limit 30   # Small sample
-    python3 migrate.py --execute          # Full migration
+Usage / 用法:
+    python3 migrate.py --dry-run              # Preview only / 仅预览
+    python3 migrate.py --execute --limit 30   # Small sample / 小样本验证
+    python3 migrate.py --execute              # Full migration / 全量迁移
 """
 import argparse, hashlib, json, os, re, sys, time
 from pathlib import Path

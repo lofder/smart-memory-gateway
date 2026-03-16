@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Memory maintenance script for Smart Memory Gateway v3.
+记忆维护脚本 — 智能记忆网关 v3。
 
-Usage:
-    python3 maintenance.py --mode daily        # Opus re-extract + dedup + report
-    python3 maintenance.py --mode weekly       # daily + consolidation + conflict + decay
-    python3 maintenance.py --mode report_only  # Just report, no changes
+Usage / 用法:
+    python3 maintenance.py --mode daily        # Opus re-extract + dedup + report / Opus 重提取 + 去重 + 报告
+    python3 maintenance.py --mode weekly       # daily + consolidation + conflict + decay / 每日 + 巩固 + 冲突 + 衰减
+    python3 maintenance.py --mode report_only  # Just report, no changes / 仅报告，不做修改
 
 Designed to be called by cron or manually via MCP tool.
+设计为由 cron 自动触发或通过 MCP 工具手动调用。
 """
 import argparse, json, os, re, subprocess, sys, time
 from datetime import datetime, timezone, timedelta

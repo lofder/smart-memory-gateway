@@ -1,5 +1,6 @@
 from __future__ import annotations
-"""Consolidation engine: merge related memories into knowledge summaries.
+"""Consolidation engine — merge related memories into knowledge summaries.
+巩固引擎 — 将相关记忆合并为知识摘要。
 
 Adapted from smart-memory/cognition/memory_consolidation_agent.py with:
 - LLM-based semantic summary (not simple text concatenation)
@@ -16,6 +17,7 @@ def find_consolidation_groups(
     min_group_size: int = 3,
 ) -> list[list[dict]]:
     """Group memories by shared entities/topics for consolidation.
+    按共享实体/主题对记忆分组，准备巩固。
 
     Simple heuristic: group by first entity or by similar content keywords.
     """
@@ -39,6 +41,7 @@ def find_consolidation_groups(
 
 def consolidate_group(memories: list[dict], llm_call, scope: str) -> dict | None:
     """Consolidate a group of memories into a single knowledge summary.
+    将一组记忆巩固为单条知识摘要。
 
     Args:
         memories: List of related memories to consolidate
@@ -79,7 +82,8 @@ Memories:
 
 
 def mark_consolidated_sources(source_ids: list[str], new_memory_id: str, qdrant_client, collection: str):
-    """Mark original memories as consolidated (accelerated decay, not deleted)."""
+    """Mark original memories as consolidated (accelerated decay, not deleted).
+    标记原始记忆为已巩固（加速衰减，不硬删）。"""
     for sid in source_ids:
         try:
             qdrant_client.set_payload(

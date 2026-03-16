@@ -1,5 +1,6 @@
 from __future__ import annotations
-"""Conflict detection: find and resolve contradictory memories.
+"""Conflict detection — find and resolve contradictory memories.
+冲突检测 — 发现并解决矛盾的记忆。
 
 Adapted from smart-memory/cognition/belief_conflict_resolver.py with:
 - Only checks within same scope (scope-aware)
@@ -15,6 +16,7 @@ def detect_conflicts(
     similarity_threshold: float = 0.85,
 ) -> list[tuple[dict, dict]]:
     """Find pairs of memories that might conflict.
+    找到可能冲突的记忆对。
 
     Returns list of (memory_a, memory_b) pairs where both are
     fact or preference type with high similarity but potentially
@@ -46,6 +48,7 @@ def detect_conflicts(
 
 def resolve_conflict(mem_a: dict, mem_b: dict, llm_call) -> dict:
     """Use LLM to determine if two memories conflict and which to keep.
+    用 LLM 判断两条记忆是否冲突，保留哪个。
 
     Returns: {"conflicts": bool, "keep": "A"/"B"/"both", "reasoning": str}
     """
@@ -77,7 +80,8 @@ def apply_resolution(
     qdrant_client,
     collection: str,
 ):
-    """Apply conflict resolution by marking the loser as superseded."""
+    """Apply conflict resolution by marking the loser as superseded.
+    应用冲突解决：将被取代的记忆标记为 superseded。"""
     if not resolution.get("conflicts") or resolution.get("keep") == "both":
         return
 

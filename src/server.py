@@ -1,7 +1,18 @@
 """Mem0 Smart Memory Gateway v3 — MCP Server.
+Mem0 智能记忆网关 v3 — MCP 服务端。
 
 Scope-aware memory with provenance tracking, permission enforcement,
 degradation strategy, and Qdrant-level metadata management.
+
+支持 scope 隔离的记忆系统，具备来源追踪、权限校验、降级策略和
+基于 Qdrant 的元数据管理能力。
+
+Tools provided / 提供的工具:
+  - mem0_add:         Store a memory with structured provenance / 存储带来源追踪的记忆
+  - mem0_search:      Dual-query search with scope isolation / 双查询搜索，支持 scope 隔离
+  - mem0_get_all:     List all memories with optional scope filter / 列出所有记忆，可按 scope 过滤
+  - mem0_status:      Health check and statistics / 健康检查和统计
+  - mem0_maintenance: Trigger daily/weekly maintenance / 触发每日/每周维护
 """
 import json, os, re, sys, threading, time, uuid
 from datetime import datetime, timezone
