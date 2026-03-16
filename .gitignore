@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+config.yaml
+*.sqlite
+*.snapshot
+write_queue.jsonl
+maintenance_plans/
+maintenance_reports/
+qdrant_server_data/
+backups/
+*.log
+.DS_Store
