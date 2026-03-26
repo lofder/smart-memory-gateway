@@ -1,24 +1,32 @@
 #!/bin/bash
-# Smart Memory Gateway v3 - Maintenance wrapper
-# Paths resolved at install time by setup.sh
-NODE_BIN="/usr/local/Cellar/node@22/22.22.0_1/bin"
-PYTHON_BIN="/usr/local/Cellar/python@3.14/3.14.3_1/bin"
-export PATH="$NODE_BIN:$PYTHON_BIN:/usr/local/bin:$PATH"
+# Smart Memory Gateway - Maintenance wrapper
+# Usage: ./run-maintenance.sh [daily|weekly]
+
+set -euo pipefail
+
+# Resolve project root relative to this script
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Override these via environment or edit here after install
+: "${PYTHON_BIN:=$(command -v python3)}"
+: "${GOOGLE_API_KEY:?Set GOOGLE_API_KEY before running maintenance}"
+
 export NO_PROXY=localhost,127.0.0.1
 export no_proxy=localhost,127.0.0.1
-export GOOGLE_API_KEY="YOUR_GOOGLE_API_KEY_HERE"
+export GOOGLE_API_KEY
 
 MODE="${1:-daily}"
-SCRIPT_DIR="$HOME/.mem0-gateway/extensions/mem0-mcp"
-LOG_DIR="$HOME/.mem0-gateway/logs"
+SRC_DIR="$REPO_DIR/src"
+LOG_DIR="$REPO_DIR/logs"
 mkdir -p "$LOG_DIR"
 
 echo "[$(date)] Starting $MODE maintenance" >> "$LOG_DIR/maintenance.log"
-python3 "$SCRIPT_DIR/maintenance.py" --mode "$MODE" >> "$LOG_DIR/maintenance.log" 2>&1
+"$PYTHON_BIN" "$SRC_DIR/maintenance.py" --mode "$MODE" >> "$LOG_DIR/maintenance.log" 2>&1
 EXIT_CODE=$?
 echo "[$(date)] Finished $MODE maintenance (exit: $EXIT_CODE)" >> "$LOG_DIR/maintenance.log"
 
 if [ $EXIT_CODE -ne 0 ]; then
     echo "[$(date)] RETRY: $MODE maintenance" >> "$LOG_DIR/maintenance.log"
-    python3 "$SCRIPT_DIR/maintenance.py" --mode "$MODE" >> "$LOG_DIR/maintenance.log" 2>&1
+    sleep 10
+    "$PYTHON_BIN" "$SRC_DIR/maintenance.py" --mode "$MODE" >> "$LOG_DIR/maintenance.log" 2>&1
 fi
