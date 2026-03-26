@@ -31,33 +31,36 @@
 
 ## Why Engram?
 
-AI agents forget everything between conversations. You tell an agent your preferences, watch it do great work, come back the next day — gone. The typical fix is "just add a vector database", but that creates a worse problem:
+You've had this experience: you spend 20 minutes explaining your project setup, coding style, or preferences to an AI assistant. It does exactly what you want. Next morning, new session — it knows nothing. You start over.
 
-- **No isolation** — Agent A reads Agent B's private notes. Group chat memories leak into DMs.
-- **No expiration** — Stale memories from months ago pollute every search.
-- **No safety** — API keys and passwords get embedded alongside legitimate memories.
-- **No compression** — After a month you have 10,000 task logs burning tokens on every context window.
+This is the core problem: **AI has no long-term memory.**
 
-Engram solves this with a **scope-aware, self-maintaining memory layer** that sits between your agents and a vector store:
+The context window is short-term memory. It works within a conversation but vanishes the moment the session ends. Some tools try to fix this by dumping everything into a vector database. That helps for a while — until you realize:
+
+- **It remembers too much.** Three months of notes pile up. Every search returns outdated information mixed with useful stuff. You can't tell which is which.
+- **It doesn't know what matters.** A casual remark gets stored with the same weight as a critical project decision. Your context window fills up with noise.
+- **It never cleans up after itself.** Old contradictions sit next to new corrections. Duplicate memories stack up. Nobody maintains it.
+
+Engram takes a different approach. Instead of "store everything and hope for the best", it gives AI a **structured, self-maintaining memory** — one that knows what to keep, what to forget, and what to compress.
 
 ```
-Without Engram:  Agent → flat vector dump → garbage after 2 weeks
-With Engram:     Agent → scoped, ranked, compressed memory → useful after 6 months
+Typical approach:  Save everything → search everything → hope for the best
+Engram approach:   Save with context → rank by trust → compress over time → recall what matters
 ```
 
 ## Design Philosophy
 
-### 1. Agents drive their own memory
+### 1. Let the AI manage its own memory
 
-The agent — not a human operator — decides what to remember, when to recall, and how to use memories. Engram provides tools; the agent chooses when to call them. No mandatory "save everything" or "retrieve on every message."
+You don't manually save bookmarks for every webpage you visit. Your brain decides what's worth remembering. Engram works the same way — the AI decides what to store, when to recall, and what to ignore. You just use it naturally; memory happens in the background.
 
-### 2. Token budget is sacred
+### 2. Less is more
 
-Every memory returned costs tokens. Engram aggressively compresses: dedup (0.92 cosine threshold), consolidation (50 task_logs → 1 knowledge), Bjork decay (stale memories auto-archive), trust ranking (high-quality first), and hard limits on result count.
+Returning 50 old memories into every conversation doesn't help — it wastes tokens and confuses the model. Engram keeps memory lean: duplicates are merged, old logs get summarized into compact knowledge, and stale entries fade away automatically. The result is a small, high-quality set of memories that actually improve responses.
 
-### 3. Some memories must live forever
+### 3. Important things should last
 
-User preferences, learned lessons, and consolidated knowledge never decay. Operational logs fade, but before they do, weekly consolidation distills them into permanent knowledge. The result: a memory that gets *better* over time, not noisier.
+Not all memories are equal. Your preferences ("always use TypeScript"), lessons learned ("that API has a 5-second timeout"), and key decisions ("we're using PostgreSQL") should never be forgotten. But yesterday's deployment log? That can fade — after being distilled into lasting knowledge first.
 
 ## MCP Tools
 
@@ -511,33 +514,36 @@ Issues and PRs welcome. Please read [docs/development.md](docs/development.md) f
 
 ## 为什么需要 Engram？
 
-AI Agent 在对话之间会遗忘一切。你告诉 Agent 你的偏好，看着它做得很好，第二天回来——全忘了。常见的方案是"加个向量数据库"，但这反而带来更糟的问题：
+你一定有过这样的体验：花了 20 分钟跟 AI 助手解释你的项目结构、编码风格、个人偏好。它干得漂亮。第二天，新会话——它什么都不记得了。你只能从头再来。
 
-- **无隔离** — Agent A 能读到 Agent B 的私人笔记，群聊记忆泄漏到私聊
-- **无过期** — 几个月前的陈旧记忆污染每次搜索
-- **无安全** — API key 和密码跟正常记忆一起被 embedding 存入
-- **无压缩** — 一个月后你有上万条 task_log，每次上下文窗口都在烧 token
+这就是核心问题：**AI 没有长期记忆。**
 
-Engram 用一个**scope 感知、自维护的记忆层**解决这些问题：
+上下文窗口是短期记忆，在一次对话内管用，会话结束就消失了。有些工具试图把所有东西塞进向量数据库来解决这个问题，短期有效——直到你发现：
+
+- **它记得太多了。** 三个月的笔记堆在一起，每次搜索都是过时信息和有用信息混杂。你分不清哪个是哪个。
+- **它不知道什么重要。** 一句随口的话和一个关键项目决策被同等对待。你的上下文窗口被噪音塞满。
+- **它从不自我清理。** 旧的错误结论和新的修正并排存在，重复记忆不断堆积。没人维护它。
+
+Engram 采用了不同的思路。不是"存一切然后听天由命"，而是给 AI 一个**结构化、能自我维护的记忆**——知道什么该留、什么该忘、什么该压缩。
 
 ```
-没有 Engram:  Agent → 扁平向量堆 → 两周后变垃圾
-有 Engram:    Agent → 分域、排序、压缩的记忆 → 六个月后仍然有用
+常见做法:   全量保存 → 全量搜索 → 听天由命
+Engram:    带上下文保存 → 按信任度排序 → 随时间压缩 → 只召回有用的
 ```
 
 ## 设计理念
 
-### 1. Agent 驱动自己的记忆
+### 1. 让 AI 管理自己的记忆
 
-Agent——而非人类——决定记什么、何时回忆、如何使用记忆。Engram 提供工具，Agent 选择何时调用。没有强制的"全量保存"或"每条消息都检索"。
+你不会手动给每个打开过的网页存书签，你的大脑会自己判断什么值得记住。Engram 同理——AI 自己决定存什么、何时回忆、忽略什么。你只管正常使用，记忆在后台自然发生。
 
-### 2. Token 预算神圣不可侵犯
+### 2. 少即是多
 
-每条返回的记忆都消耗 token。Engram 激进压缩：去重（0.92 余弦阈值）、巩固（50 条 task_log → 1 条 knowledge）、Bjork 衰减（陈旧记忆自动归档）、trust 排序（高质量优先）、返回数量硬限制。
+每次对话塞进去 50 条旧记忆并没有帮助——只会浪费 token 和干扰模型。Engram 让记忆保持精简：重复的合并、旧日志浓缩成简洁的知识、过时的条目自动淡出。最终结果是一组小而高质量的记忆，真正能改善回复质量。
 
-### 3. 有些记忆必须永存
+### 3. 重要的东西应该持久
 
-用户偏好、学到的教训和巩固后的 knowledge 永不衰减。操作日志会淡出，但在淡出之前，每周巩固会把它们提炼成永久 knowledge。结果：记忆随时间**变得更好**，而不是更嘈杂。
+不是所有记忆都同等重要。你的偏好（"永远用 TypeScript"）、学到的教训（"那个 API 有 5 秒超时"）、关键决策（"我们用 PostgreSQL"）——这些永远不该被忘记。但昨天的部署日志？它可以慢慢淡出——在被提炼成持久知识之后。
 
 ## MCP 工具
 
