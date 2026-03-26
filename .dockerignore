@@ -1,0 +1,15 @@
+.git
+.env
+*.md
+docs/
+tests/
+scripts/
+config.json.example
+config.example.yaml
+.env.example
+docker-compose.yml
+Dockerfile
+.dockerignore
+.gitignore
+logs/
+article-devto.md

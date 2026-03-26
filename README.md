@@ -51,19 +51,42 @@ A production-grade memory system that gives AI agents persistent, structured mem
 
 ### Quick Start
 
-**Prerequisites**: Python 3.11+, Qdrant Server ([download](https://github.com/qdrant/qdrant/releases)), Google API Key or OpenAI-compatible embedding provider.
+#### Option A: Docker Compose (recommended)
 
 ```bash
-pip install mem0ai qdrant-client mcp pyyaml pydantic
+git clone https://github.com/lofder/smart-memory-gateway.git engram
+cd engram
+./setup.sh          # creates config.yaml + .env, choose Docker mode
+# Edit .env → set GOOGLE_API_KEY
+docker compose up -d
+```
 
-cp config.example.yaml config.yaml
-# Edit config.yaml: set your API keys, Qdrant host, agent permissions
+Done. Qdrant + Engram are running.
 
-./qdrant --config-path qdrant-config.yaml &
+#### Option B: Local Python
+
+```bash
+git clone https://github.com/lofder/smart-memory-gateway.git engram
+cd engram
+./setup.sh          # creates config.yaml + .env, choose Local mode
+# Edit .env → set GOOGLE_API_KEY
+# Start Qdrant separately: docker run -d -p 6333:6333 qdrant/qdrant
 python src/server.py
 ```
 
-**Use from your AI agent:**
+#### MCP Client Config (Cursor / Claude Desktop)
+
+```json
+{
+  "engram": {
+    "command": "python",
+    "args": ["/path/to/engram/src/server.py"],
+    "env": { "GOOGLE_API_KEY": "your-key" }
+  }
+}
+```
+
+#### Use from your AI agent
 
 ```python
 mcp(action="call", server="mem0", tool="mem0_search",
@@ -199,19 +222,42 @@ Issues and PRs welcome. Please read [docs/development.md](docs/development.md) f
 
 ### 快速开始
 
-**前置条件**：Python 3.11+、Qdrant Server（[下载](https://github.com/qdrant/qdrant/releases)）、Google API Key 或 OpenAI 兼容 embedding 服务。
+#### 方式 A：Docker Compose（推荐）
 
 ```bash
-pip install mem0ai qdrant-client mcp pyyaml pydantic
+git clone https://github.com/lofder/smart-memory-gateway.git engram
+cd engram
+./setup.sh          # 生成 config.yaml + .env，选择 Docker 模式
+# 编辑 .env → 设置 GOOGLE_API_KEY
+docker compose up -d
+```
 
-cp config.example.yaml config.yaml
-# 编辑 config.yaml：设置 API 密钥、Qdrant 地址、Agent 权限
+完成。Qdrant + Engram 已在运行。
 
-./qdrant --config-path qdrant-config.yaml &
+#### 方式 B：本地 Python
+
+```bash
+git clone https://github.com/lofder/smart-memory-gateway.git engram
+cd engram
+./setup.sh          # 生成 config.yaml + .env，选择本地模式
+# 编辑 .env → 设置 GOOGLE_API_KEY
+# 另起 Qdrant: docker run -d -p 6333:6333 qdrant/qdrant
 python src/server.py
 ```
 
-**从 AI Agent 调用：**
+#### MCP 客户端配置（Cursor / Claude Desktop）
+
+```json
+{
+  "engram": {
+    "command": "python",
+    "args": ["/path/to/engram/src/server.py"],
+    "env": { "GOOGLE_API_KEY": "your-key" }
+  }
+}
+```
+
+#### 从 AI Agent 调用
 
 ```python
 mcp(action="call", server="mem0", tool="mem0_search",

@@ -25,9 +25,18 @@ import yaml
 from mcp.server.fastmcp import FastMCP
 from qdrant_client import QdrantClient
 
-CONFIG_PATH = Path(__file__).parent / "config.yaml"
-HOST_CONFIG_PATH = Path.home() / ".mem0-gateway" / "config.json"
-WRITE_QUEUE_PATH = Path.home() / ".mem0-gateway" / "mem0" / "write_queue.jsonl"
+CONFIG_PATH = Path(os.environ.get(
+    "ENGRAM_CONFIG",
+    Path(__file__).parent.parent / "config.yaml",
+))
+HOST_CONFIG_PATH = Path(os.environ.get(
+    "ENGRAM_HOST_CONFIG",
+    Path.home() / ".mem0-gateway" / "config.json",
+))
+WRITE_QUEUE_PATH = Path(os.environ.get(
+    "ENGRAM_WRITE_QUEUE",
+    Path.home() / ".mem0-gateway" / "mem0" / "write_queue.jsonl",
+))
 ENV_PATHS = [
     Path.home() / ".mem0-gateway" / ".env",
     Path.home() / ".mem0-gateway" / ".env.main",
@@ -135,7 +144,11 @@ def _init_backends():
     try:
         from mem0 import Memory
         _load_env_layers()
-        oc = json.load(open(HOST_CONFIG_PATH))
+        if HOST_CONFIG_PATH.exists():
+            oc = json.load(open(HOST_CONFIG_PATH))
+        else:
+            oc = {}
+            sys.stderr.write(f"engram: {HOST_CONFIG_PATH} not found, using env vars only\n")
         emb_primary = CFG["embedding"]["primary"]
         emb_fallback = CFG["embedding"]["fallback"]
         q_cfg = CFG["qdrant"]

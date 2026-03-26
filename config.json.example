@@ -1,0 +1,10 @@
+{
+  "models": {
+    "providers": {
+      "lingyun-gemini": {
+        "apiKey": "${LINGYUN_GEMINI_API_KEY}",
+        "baseUrl": "https://your-gemini-proxy.example.com"
+      }
+    }
+  }
+}
