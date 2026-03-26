@@ -2,9 +2,10 @@
 
 # Engram
 
-**Stop maintaining rules.md. Let your AI remember on its own.**
+**Your AI should understand you better the longer you use it.**
+**Stop remembering things for your AI — it should remember you.**
 
-别再手写 rules.md 了——让你的 AI 自己记住。
+你的 AI 应该越用越懂你。别再替 AI 记东西了——该记住你的是它。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
