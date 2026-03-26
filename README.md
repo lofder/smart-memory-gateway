@@ -2,9 +2,7 @@
 
 # Engram
 
-**Conquer your AI with personality, not a rulebook.**
-
-以德服 AI。
+**Conquer your AI with personality, not a rulebook. 以德服 AI。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
