@@ -2,10 +2,9 @@
 
 # Engram
 
-**Your AI should understand you better the longer you use it.**
-**Stop remembering things for your AI — it should remember you.**
+**Conquer your AI with personality, not a rulebook.**
 
-你的 AI 应该越用越懂你。别再替 AI 记东西了——该记住你的是它。
+以德服 AI。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
