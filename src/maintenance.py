@@ -44,6 +44,7 @@ ENV_PLACEHOLDER_RE = re.compile(r"^\$\{([^}]+)\}$")
 with open(CONFIG_PATH) as f:
     CFG = yaml.safe_load(f)
 
+DEFAULT_USER_ID = CFG.get("default_user_id", "default")
 TOP_LEVEL_PAYLOAD_KEYS = {"data", "hash", "created_at", "updated_at", "user_id"}
 
 
@@ -253,7 +254,8 @@ def _point_to_memory_item(point):
     }
 
 
-def _load_all_memories_from_qdrant(qc, user_id="main", scope="", include_archived=True):
+def _load_all_memories_from_qdrant(qc, user_id=None, scope="", include_archived=True):
+    user_id = user_id or DEFAULT_USER_ID
     collection = CFG["qdrant"]["collection"]
     offset = None
     items = []
@@ -283,7 +285,8 @@ def _load_all_memories_from_qdrant(qc, user_id="main", scope="", include_archive
     return items
 
 
-def get_all_memories(m, qc=None, user_id="main", scope="", include_archived=True):
+def get_all_memories(m, qc=None, user_id=None, scope="", include_archived=True):
+    user_id = user_id or DEFAULT_USER_ID
     if qc is not None:
         return _load_all_memories_from_qdrant(qc, user_id=user_id, scope=scope, include_archived=include_archived)
 
@@ -336,7 +339,7 @@ def step_opus_reextract(opus_mem, memories, report, qc=None):
             metadata["original_created_at"] = mem.get("created_at", "")
 
             # Add new version first (safe — old version still exists if this fails)
-            new_result = opus_mem.add(content, user_id="main", metadata=metadata)
+            new_result = opus_mem.add(content, user_id=DEFAULT_USER_ID, metadata=metadata)
             new_id = ""
             if isinstance(new_result, dict):
                 results = new_result.get("results", [])
@@ -373,7 +376,7 @@ def step_dedup(m, qc, memories, report):
         scope_mems = [m2 for m2 in memories if m2.get("metadata", {}).get("scope") == scope and not m2.get("metadata", {}).get("archived")]
         seen_pairs = set()
         for mem in scope_mems:
-            similar = m.search(mem.get("memory", ""), user_id="main", filters={"scope": scope}, limit=5)
+            similar = m.search(mem.get("memory", ""), user_id=DEFAULT_USER_ID, filters={"scope": scope}, limit=5)
             items = similar if isinstance(similar, list) else similar.get("results", [])
             for item in items:
                 if item.get("id") == mem.get("id"):
@@ -433,7 +436,7 @@ def step_consolidation(m, qc, memories, llm_call, report):
             result = consolidate_group(group, llm_call, scope)
             if result:
                 try:
-                    new_mem = m.add(result["content"], user_id="main", metadata={
+                    new_mem = m.add(result["content"], user_id=DEFAULT_USER_ID, metadata={
                         "scope": scope, "mem_type": "knowledge", "source": "consolidation",
                         "trust": "medium", "agent": "maintenance",
                         "consolidated_from": json.dumps(result.get("consolidated_from", [])),

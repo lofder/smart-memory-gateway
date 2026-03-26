@@ -25,10 +25,10 @@ L3 File Archive (daily logs, cold storage)
 
 | 操作 | 工具 | 示例 |
 |------|------|------|
-| 搜记忆 | `mcp(action="call", server="mem0", tool="mem0_search", args={...})` | `args={"query": "用户偏好", "scope": "group:oc_xxx", "limit": 5}` |
-| 存记忆 | `mcp(action="call", server="mem0", tool="mem0_add", args={...})` | `args={"content": "...", "scope": "global", "mem_type": "preference"}` |
-| 看状态 | `mcp(action="call", server="mem0", tool="mem0_status", args={})` | 返回总量/分布/健康度 |
-| 跑维护 | `mcp(action="call", server="mem0", tool="mem0_maintenance", args={...})` | `args={"mode": "daily"}` |
+| 搜记忆 | `mcp(action="call", server="engram", tool="mem0_search", args={...})` | `args={"query": "用户偏好", "scope": "group:oc_xxx", "limit": 5}` |
+| 存记忆 | `mcp(action="call", server="engram", tool="mem0_add", args={...})` | `args={"content": "...", "scope": "global", "mem_type": "preference"}` |
+| 看状态 | `mcp(action="call", server="engram", tool="mem0_status", args={})` | 返回总量/分布/健康度 |
+| 跑维护 | `mcp(action="call", server="engram", tool="mem0_maintenance", args={...})` | `args={"mode": "daily"}` |
 
 **谁读谁写：**
 - Main: 读全部 scope + 写 global/group/dm
@@ -50,7 +50,7 @@ L3 File Archive (daily logs, cold storage)
 | MCP Server (FastMCP) | v3 | 工具注册 + 权限校验 + 降级 | stdio (host framework 插件) |
 | 认知引擎 | v1 | 衰减/分类/巩固/冲突检测 | Python modules |
 | 维护脚本 | v1 | 每日/每周自动维护 | cron |
-| Gemini Embedding | 001 | MTEB #1 embedding 模型 | Google API (VPN) / lingyun 备选 |
+| Gemini Embedding | 001 | MTEB #1 embedding 模型 | Google API / OpenAI-compatible endpoint |
 
 ### Scope 隔离模型
 
@@ -212,7 +212,7 @@ divisor = 1 + min(log(1 + access_count), 3.0)
 | 2 | 自动去重 >= 0.92 | 无 |
 | 3 | 候选去重 0.85-0.92（LLM 判断） | Opus |
 | 4 | unscoped 二次归类 | Opus |
-| 5 | 生成报告 → 发飞书 | 无 |
+| 5 | 生成报告 → 发送 webhook 通知 | 无 |
 
 所有维护操作 scope-aware：只在同一 scope 内执行，不跨 scope。
 
@@ -227,7 +227,7 @@ divisor = 1 + min(log(1 + access_count), 3.0)
 
 ### 手动触发
 
-飞书对话：跟 Main 说"跑一下维护"或"看一下记忆状态"
+通过 MCP 工具调用：`mem0_maintenance(mode="daily")` 或 `mem0_status()`
 
 ### 备份
 
@@ -288,13 +288,13 @@ divisor = 1 + min(log(1 + access_count), 3.0)
 ### B. 关键配置
 
 Embedding: `gemini-embedding-001` (3072 dims, MTEB #1)
-- 主通道：Google 直连（需 VPN）
-- 备选：lingyun 代理（无需 VPN，按量付费）
+- 通过 `GOOGLE_API_KEY` 或 `EMBEDDING_API_KEY` 配置
+- 支持任意 OpenAI-compatible embedding endpoint（见 `config.yaml` → `embedding`）
 
 LLM:
 - 日常 add: `infer=False`（不调 LLM）
-- 每日/每周维护: Opus 4.6
-- Fallback: lingyun-1/opus → lingyun-3/opus → gpt-5.4
+- 每日/每周维护: 通过 `config.yaml` → `llm` 配置（默认 gpt-4o-mini）
+- 支持任意 OpenAI-compatible LLM（通过 `LLM_API_KEY` + `llm.base_url` 配置）
 
 ### C. 变更日志
 

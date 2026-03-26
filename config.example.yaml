@@ -55,6 +55,10 @@ maintenance:
   # Base URL for maintenance LLM (fallback if provider not in host config)
   llm_base_url: https://api.openai.com/v1
 
+# --- Default user ID for Mem0 operations ---
+# All memories are partitioned by this value. Change if integrating with existing Mem0 data.
+default_user_id: default
+
 quality_tier: high
 
 # --- Embedding configuration ---

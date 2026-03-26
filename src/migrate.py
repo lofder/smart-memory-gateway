@@ -32,6 +32,8 @@ ENV_PLACEHOLDER_RE = re.compile(r"^\$\{([^}]+)\}$")
 with open(CONFIG_PATH) as f:
     CFG = yaml.safe_load(f)
 
+DEFAULT_USER_ID = CFG.get("default_user_id", "default")
+
 
 def _load_env_layers():
     for env_path in ENV_PATHS:
@@ -269,7 +271,7 @@ def execute(records, limit=None):
             "schema_version": CFG.get("schema_version", 1),
         }
         try:
-            result = m.add(r["content"], user_id="main", metadata=metadata)
+            result = m.add(r["content"], user_id=DEFAULT_USER_ID, metadata=metadata)
             ok += 1
             if (i + 1) % 10 == 0:
                 print(f"  [{i+1}/{len(records)}] OK: {r['mem_type']}/{r['scope']} - {r['content'][:50]}...")

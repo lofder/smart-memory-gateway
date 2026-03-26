@@ -44,6 +44,7 @@ with open(CONFIG_PATH) as f:
     CFG = yaml.safe_load(f)
 
 NEVER_STORE = [re.compile(p) for p in CFG.get("never_store_patterns", [])]
+DEFAULT_USER_ID = CFG.get("default_user_id", "default")
 SEARCH_ONLY_SCOPES = ("all",)
 SEARCH_ONLY_PREFIXES = ("cross:",)
 TOP_LEVEL_PAYLOAD_KEYS = {"data", "hash", "created_at", "updated_at", "user_id"}
@@ -301,7 +302,8 @@ def _point_to_memory_item(point):
     }
 
 
-def _load_all_memories_from_qdrant(qc, user_id="main", scope="", include_archived=True):
+def _load_all_memories_from_qdrant(qc, user_id=None, scope="", include_archived=True):
+    user_id = user_id or DEFAULT_USER_ID
     collection = CFG["qdrant"]["collection"]
     offset = None
     items = []
@@ -371,7 +373,7 @@ def _check_never_store(content: str) -> str | None:
 
 def _do_search(mem, query, filters, limit):
     try:
-        results = mem.search(query, user_id="main", limit=limit, filters=filters or None)
+        results = mem.search(query, user_id=DEFAULT_USER_ID, limit=limit, filters=filters or None)
         items = results if isinstance(results, list) else results.get("results", [])
         return items
     except Exception as e:
@@ -511,7 +513,7 @@ def _replay_write_queue(mem):
                 break
             try:
                 entry = json.loads(line)
-                mem.add(entry["content"], user_id="main", metadata=entry["metadata"])
+                mem.add(entry["content"], user_id=DEFAULT_USER_ID, metadata=entry["metadata"])
                 replayed += 1
                 # Per-entry ack: truncate .processing to remaining lines
                 try:
@@ -598,7 +600,7 @@ def mem0_add(content: str, scope: str = "", context: str = "",
         return json.dumps({"queued": True, "write_id": write_id, "reason": "Mem0 unavailable, cached for replay"})
 
     try:
-        result = mem.add(content, user_id="main", metadata=metadata, infer=False)
+        result = mem.add(content, user_id=DEFAULT_USER_ID, metadata=metadata, infer=False)
         return json.dumps(result, default=str, ensure_ascii=False)
     except Exception as e:
         write_id = str(uuid.uuid4())
@@ -699,12 +701,12 @@ def mem0_status(agent: str = "main") -> str:
     try:
         sdk_count = None
         if mem is not None:
-            all_mem = mem.get_all(user_id="main")
+            all_mem = mem.get_all(user_id=DEFAULT_USER_ID)
             sdk_items = all_mem if isinstance(all_mem, list) else all_mem.get("results", [])
             sdk_count = len(sdk_items)
 
         if qc is not None:
-            items = _load_all_memories_from_qdrant(qc, user_id="main", include_archived=True)
+            items = _load_all_memories_from_qdrant(qc, user_id=DEFAULT_USER_ID, include_archived=True)
             status["inventory_source"] = "qdrant_scroll"
         else:
             items = sdk_items

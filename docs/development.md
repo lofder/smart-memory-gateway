@@ -78,22 +78,17 @@ Every memory stores `embedding_model` in metadata. When switching models, old ve
 - `NO_PROXY=localhost,127.0.0.1` — Required! macOS system proxy intercepts localhost HTTP requests to Qdrant. Set in MCP server env config and all scripts.
 
 - `GOOGLE_API_KEY` — For `gemini-embedding-001`. Set in MCP server env or shell.
+- `LLM_API_KEY` — For maintenance LLM calls (OpenAI-compatible). Falls back to `OPENAI_API_KEY`.
+- `EMBEDDING_API_KEY` — Optional override for embedding API key (defaults to `GOOGLE_API_KEY`).
 
 ## Testing / 测试
 
 ```bash
-cd src && python -c "
-from engines import compute_importance, classify_by_keywords
+# Run all unit tests / 运行全部单元测试
+pytest tests/ -v
 
-# Test decay / 测试衰减
-mem = {'metadata': {'mem_type': 'task_log', 'access_count': 0}, 'created_at': '2026-02-01T00:00:00+00:00'}
-print('40-day task_log importance:', compute_importance(mem))
-
-# Test classifier / 测试分类器
-print('以后简约:', classify_by_keywords('以后文案都用简约风格'))
-print('Gateway命令:', classify_by_keywords('Gateway 重启命令是 launchctl'))
-print('好的:', classify_by_keywords('好的'))
-"
+# Run a specific test file / 运行指定测试文件
+pytest tests/test_engines.py -v
 ```
 
 ## Contributing / 贡献
