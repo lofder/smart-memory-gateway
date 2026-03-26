@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Memory maintenance script for Smart Memory Gateway v3.
+"""Memory maintenance script for Engram v3.
 记忆维护脚本 — 智能记忆网关 v3。
 
 Usage / 用法:

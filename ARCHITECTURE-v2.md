@@ -1,4 +1,4 @@
-# Smart Memory Gateway — Architecture v2
+# Engram — Architecture v2
 
 > Scope-aware memory for multi-agent AI systems. Mem0 + Qdrant + MCP.
 >
@@ -16,7 +16,7 @@
                     └──────────┬───────────────────┘
                                │ MCP (stdio)
                     ┌──────────▼───────────────────┐
-                    │  Smart Memory Gateway (L2)    │
+                    │       Engram (L2)             │
                     │                               │
                     │  5 MCP Tools                  │
                     │  ┌─────────────────────────┐  │

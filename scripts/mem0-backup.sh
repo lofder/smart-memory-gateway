@@ -1,5 +1,5 @@
 #!/bin/bash
-# Smart Memory Gateway v3 - Daily Qdrant backup
+# Engram v3 - Daily Qdrant backup
 export NO_PROXY=localhost,127.0.0.1
 BACKUP_DIR="$HOME/.mem0-gateway/mem0/backups"
 LOG_FILE="$HOME/.mem0-gateway/logs/backup.log"

@@ -1,4 +1,4 @@
-# Smart Memory Gateway v3 — 记忆系统设计文档
+# Engram v3 — 记忆系统设计文档
 
 > 版本: 1.0 | 日期: 2026-03-14 | 作者: Cursor Agent + 用户共同设计
 > 本文档面向 AI agent 和人类开发者，新论文或更新可按章节调整。
@@ -16,7 +16,7 @@
 ```
 L1 Working Memory (host framework session context, 5min TTL)
     ↓ 搜索注入
-L2 Smart Memory Gateway (Mem0 + Qdrant Server, 本文档)
+L2 Engram (Mem0 + Qdrant Server, 本文档)
     ↓ 归档衰减
 L3 File Archive (daily logs, cold storage)
 ```

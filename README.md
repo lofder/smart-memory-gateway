@@ -1,12 +1,30 @@
-# Smart Memory Gateway
+<div align="center">
 
-> Scope-aware memory for multi-agent AI systems. Mem0 + Qdrant + MCP.
+# Engram
+
+**Memory traces for AI agents that persist, compress, and never leak.**
+
+记忆痕迹——为 AI Agent 打造的持久、压缩、零泄漏记忆系统。
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
+[![Mem0](https://img.shields.io/badge/Mem0-powered-orange.svg)](https://mem0.ai)
+[![Qdrant](https://img.shields.io/badge/Qdrant-vector_store-red.svg)](https://qdrant.tech)
+
+*In neuroscience, an **engram** is the physical trace a memory leaves in the brain.*
+*Engram does the same for your AI agents — scope-isolated, trust-ranked, and self-maintaining.*
+
+</div>
+
+---
 
 <p align="center">
   <a href="#english">English</a> &nbsp;|&nbsp; <a href="#中文">中文</a>
 </p>
 
----
+<!-- ============================================================ -->
+<!-- ENGLISH                                                       -->
+<!-- ============================================================ -->
 
 <details open>
 <summary><b id="english">English</b></summary>
@@ -68,7 +86,7 @@ mcp(action="call", server="mem0", tool="mem0_status", args={})
                  └──────────┬───────────────────┘
                             │ MCP (stdio)
                  ┌──────────▼───────────────────┐
-                 │  Smart Memory Gateway (L2)    │
+                 │       Engram (L2)             │
                  │                               │
                  │  5 MCP Tools:                 │
                  │  • mem0_add     (write)       │
@@ -152,9 +170,11 @@ Issues and PRs welcome. Please read [docs/development.md](docs/development.md) f
 
 </details>
 
----
+<!-- ============================================================ -->
+<!-- 中文                                                          -->
+<!-- ============================================================ -->
 
-<details>
+<details open>
 <summary><b id="中文">中文</b></summary>
 
 为 AI Agent 提供生产级的持久化结构化记忆，支持群聊隔离、来源追踪、神经科学启发的维护机制和可配置的访问控制。
@@ -214,7 +234,7 @@ mcp(action="call", server="mem0", tool="mem0_status", args={})
                  └──────────┬───────────────────┘
                             │ MCP (stdio)
                  ┌──────────▼───────────────────┐
-                 │  Smart Memory Gateway (L2)    │
+                 │       Engram (L2)             │
                  │                               │
                  │  5 个 MCP 工具：               │
                  │  • mem0_add     (写入)         │

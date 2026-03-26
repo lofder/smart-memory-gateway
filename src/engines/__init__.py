@@ -1,4 +1,4 @@
-"""Cognitive engines for Smart Memory Gateway v3.
+"""Cognitive engines for Engram v3.
 智能记忆网关 v3 的认知引擎模块。
 
 Engines / 引擎:

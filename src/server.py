@@ -1,4 +1,4 @@
-"""Mem0 Smart Memory Gateway v3 — MCP Server.
+"""Mem0 Engram v3 — MCP Server.
 Mem0 智能记忆网关 v3 — MCP 服务端。
 
 Scope-aware memory with provenance tracking, permission enforcement,

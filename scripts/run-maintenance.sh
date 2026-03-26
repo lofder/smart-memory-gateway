@@ -1,5 +1,5 @@
 #!/bin/bash
-# Smart Memory Gateway - Maintenance wrapper
+# Engram - Maintenance wrapper
 # Usage: ./run-maintenance.sh [daily|weekly]
 
 set -euo pipefail
