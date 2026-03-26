@@ -2,17 +2,16 @@
 
 # Engram
 
-**Memory traces for AI agents that persist, compress, and never leak.**
+**Stop maintaining rules.md. Let your AI remember on its own.**
 
-记忆痕迹——为 AI Agent 打造的持久、压缩、零泄漏记忆系统。
+别再手写 rules.md 了——让你的 AI 自己记住。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
 [![Mem0](https://img.shields.io/badge/Mem0-powered-orange.svg)](https://mem0.ai)
 [![Qdrant](https://img.shields.io/badge/Qdrant-vector_store-red.svg)](https://qdrant.tech)
 
-*In neuroscience, an **engram** is the physical trace a memory leaves in the brain.*
-*Engram does the same for your AI agents — scope-isolated, trust-ranked, and self-maintaining.*
+*An engram is the trace a memory leaves in the brain. This project does the same for AI — memory that persists across sessions, stays organized, and cleans up after itself.*
 
 </div>
 
