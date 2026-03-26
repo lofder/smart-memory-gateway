@@ -33,19 +33,22 @@
 
 You've had this experience: you spend 20 minutes explaining your project setup, coding style, or preferences to an AI assistant. It does exactly what you want. Next morning, new session — it knows nothing. You start over.
 
-This is the core problem: **AI has no long-term memory.**
+So you try the workaround: write it all down in a markdown file. `.cursor/rules`, `AGENTS.md`, a system prompt doc — whatever your tool calls it. It works at first. But then:
 
-The context window is short-term memory. It works within a conversation but vanishes the moment the session ends. Some tools try to fix this by dumping everything into a vector database. That helps for a while — until you realize:
+- The file keeps growing. Every time the AI gets something wrong, you add another rule.
+- Old instructions conflict with new ones, and you have to go back and reconcile.
+- You realize you're spending more time **maintaining the AI's memory** than doing actual work.
+- You have multiple projects, multiple agents — and now multiple files to keep in sync.
 
-- **It remembers too much.** Three months of notes pile up. Every search returns outdated information mixed with useful stuff. You can't tell which is which.
-- **It doesn't know what matters.** A casual remark gets stored with the same weight as a critical project decision. Your context window fills up with noise.
-- **It never cleans up after itself.** Old contradictions sit next to new corrections. Duplicate memories stack up. Nobody maintains it.
+You've become a full-time memory manager for your AI. That's backwards.
 
-Engram takes a different approach. Instead of "store everything and hope for the best", it gives AI a **structured, self-maintaining memory** — one that knows what to keep, what to forget, and what to compress.
+The deeper problem isn't just "AI forgets." It's that **the burden of remembering falls entirely on you.** You're manually doing what memory should do automatically: deciding what matters, updating when things change, and throwing out what's stale.
+
+Engram flips this. Instead of you maintaining files for the AI, the AI maintains its own memory — structured, scoped, and self-cleaning. It decides what to keep, compresses old information, and forgets what's no longer relevant. You just use it.
 
 ```
-Typical approach:  Save everything → search everything → hope for the best
-Engram approach:   Save with context → rank by trust → compress over time → recall what matters
+Today:     You write rules.md → AI reads it → you update rules.md → repeat forever
+Engram:    AI remembers on its own → compresses over time → you never maintain a file again
 ```
 
 ## Design Philosophy
@@ -516,19 +519,22 @@ Issues and PRs welcome. Please read [docs/development.md](docs/development.md) f
 
 你一定有过这样的体验：花了 20 分钟跟 AI 助手解释你的项目结构、编码风格、个人偏好。它干得漂亮。第二天，新会话——它什么都不记得了。你只能从头再来。
 
-这就是核心问题：**AI 没有长期记忆。**
+于是你想了个办法：写个 md 文件。`.cursor/rules`、`AGENTS.md`、系统 prompt 文档——叫什么都行。一开始挺好用。但慢慢地：
 
-上下文窗口是短期记忆，在一次对话内管用，会话结束就消失了。有些工具试图把所有东西塞进向量数据库来解决这个问题，短期有效——直到你发现：
+- 文件越写越长。每次 AI 搞错什么，你就加一条规则。
+- 旧指令和新指令打架，你得回去手动理顺。
+- 你发现自己花在**维护 AI 的记忆**上的时间比干正事还多。
+- 你有多个项目、多个 Agent——现在还得同步多个文件。
 
-- **它记得太多了。** 三个月的笔记堆在一起，每次搜索都是过时信息和有用信息混杂。你分不清哪个是哪个。
-- **它不知道什么重要。** 一句随口的话和一个关键项目决策被同等对待。你的上下文窗口被噪音塞满。
-- **它从不自我清理。** 旧的错误结论和新的修正并排存在，重复记忆不断堆积。没人维护它。
+你变成了 AI 的全职记忆管理员。这完全搞反了。
 
-Engram 采用了不同的思路。不是"存一切然后听天由命"，而是给 AI 一个**结构化、能自我维护的记忆**——知道什么该留、什么该忘、什么该压缩。
+更深层的问题不只是"AI 会忘"，而是**记忆的负担全压在你身上。** 你在手动做记忆系统该自动做的事：判断什么重要、变化时更新、过时了就清掉。
+
+Engram 把这件事翻转过来。不是你替 AI 维护文件，而是 AI 自己维护自己的记忆——结构化的、分域的、能自我清理的。它自己判断什么该留，自动压缩旧信息，自动淡出不再相关的内容。你只管用。
 
 ```
-常见做法:   全量保存 → 全量搜索 → 听天由命
-Engram:    带上下文保存 → 按信任度排序 → 随时间压缩 → 只召回有用的
+现在:     你写 rules.md → AI 读它 → 你更新 rules.md → 无限循环
+Engram:   AI 自己记住 → 随时间压缩 → 你再也不用维护文件了
 ```
 
 ## 设计理念
