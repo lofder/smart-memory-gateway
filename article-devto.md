@@ -9,7 +9,7 @@ Every AI agent you have ever built forgets everything the moment the conversatio
 
 I run a fleet of AI agents on Feishu (think of it as the Chinese Slack) and Telegram. A main orchestrator, a devops agent, a content writer, half a dozen specialized workers. One day my content agent asked me, for the fifth time, what writing style I preferred. The devops agent had no idea we had already debugged the same DNS issue last week. Every morning, each agent woke up as a blank slate.
 
-That is not a feature. It is a bug. So I built [Engram](https://github.com/lofder/smart-memory-gateway) to fix it.
+That is not a feature. It is a bug. So I built [Engram](https://github.com/lofder/Engram) to fix it.
 
 This article is a conceptual deep-dive into the architecture decisions behind it. You do not need to know what MCP or Mem0 is. You just need to have felt the pain of stateless agents.
 
@@ -298,7 +298,7 @@ No project survives contact with production unchanged. Here is what I learned.
 
 ## Getting Started
 
-The full source is at [Engram](https://github.com/lofder/smart-memory-gateway). It runs as a standard MCP server -- plug it into any MCP-compatible framework.
+The full source is at [Engram](https://github.com/lofder/Engram). It runs as a standard MCP server -- plug it into any MCP-compatible framework.
 
 If you want to see a real-world consumer of this memory system, check out my [dropshipping product import MCP server](https://dev.to/_95a3e57463e6442feacd0/i-built-an-mcp-server-to-automate-dropshipping-product-imports-3m5b), which queries memory for supplier preferences and pricing rules every time it processes a product.
 
