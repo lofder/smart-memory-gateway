@@ -1,21 +1,10 @@
 from __future__ import annotations
-"""Decay engine — importance scoring based on age, access frequency, and memory type.
-衰减引擎 — 基于年龄、访问频率和记忆类型的重要性评分。
+"""Decay engine: importance scoring based on age, access frequency, and memory type.
 
-Formula / 公式:
-  I(t) = importance × exp(-λ × age_days / divisor)
-  divisor = 1 + min(log(1 + access_count), cap)
-  λ = ln(2) / half_life_days
-
-Per-type half-life / 按类型差异化半衰期:
-  - task_log: 30 days / 30 天（日志衰减快）
-  - procedure: 90 days / 90 天（操作手册衰减慢）
-  - fact/preference/lesson/decision/knowledge: never / 永不衰减
-
-Bjork storage-retrieval strength theory (1992):
-  Memories accessed more frequently decay slower.
-  被频繁检索的记忆衰减更慢（间隔效应）。
-  access_count >= 20 → protection effect capped / 保护效果封顶。
+Adapted from smart-memory/cognition/decay_agent.py with optimizations:
+- Per-type half-life (task_log=30d, procedure=90d, fact/preference/lesson/decision=never)
+- Bjork storage-retrieval strength: access_count extends effective half-life
+- Access count cap: min(log(1+N), 3.0) to prevent immortal memories
 """
 import math
 from datetime import datetime, timezone
@@ -27,10 +16,8 @@ def compute_importance(
     config: dict | None = None,
 ) -> float:
     """Compute current importance score for a memory.
-    计算一条记忆的当前重要性分数。
 
     Returns float 0.0-1.0. Lower = more decayed = candidate for archival.
-    返回 0.0-1.0 的浮点数。越低 = 衰减越多 = 归档候选。
     """
     now = now or datetime.now(timezone.utc)
     cfg = config or {}
@@ -82,9 +69,7 @@ def find_archive_candidates(
     threshold: float = 0.10,
     config: dict | None = None,
 ) -> list[str]:
-    """Return IDs of memories whose importance has decayed below threshold.
-    返回重要性低于阈值的记忆 ID 列表（归档候选）。
-    """
+    """Return IDs of memories whose importance has decayed below threshold."""
     now = datetime.now(timezone.utc)
     candidates = []
     for mem in memories:

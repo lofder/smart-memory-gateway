@@ -1,16 +1,10 @@
 from __future__ import annotations
-"""Memory classifier — two-layer cascade (keywords + LLM fallback).
-记忆分类器 — 两层级联（关键词规则 + LLM 兜底）。
+"""Memory classifier: two-layer cascade (keywords + LLM fallback).
 
 Layer 1: Fast keyword rules covering ~70% of clear-cut cases (zero latency).
-第一层：关键词规则覆盖 ~70% 明确场景（零延迟）。
-
 Layer 2: LLM classification for ambiguous cases (~30%), only used during maintenance.
-第二层：LLM 分类处理歧义场景（~30%），仅在维护时使用。
-
 Day-to-day add() does NOT classify — classification happens during nightly Opus re-add
 and weekly maintenance.
-日常 add() 不做分类 — 分类在凌晨 Opus 重提取和每周维护时进行。
 """
 import re
 
@@ -46,9 +40,7 @@ for mem_type, patterns in KEYWORD_RULES:
 
 
 def classify_by_keywords(content: str, context: str = "") -> str | None:
-    """Classify memory by keyword rules. Returns mem_type or None if ambiguous.
-    通过关键词规则分类记忆。返回 mem_type 或 None（歧义时交给 LLM）。
-    """
+    """Classify memory by keyword rules. Returns mem_type or None if ambiguous."""
     text = f"{content} {context}".strip().lower()
 
     for mem_type, patterns in _compiled_rules:
@@ -93,9 +85,7 @@ Output: {{"type": "...", "confidence": 0.0-1.0, "reasoning": "..."}}"""
 
 
 def classify(content: str, context: str = "", llm_call=None) -> str:
-    """Two-layer classification. Uses keywords first, LLM as fallback.
-    两层级联分类。先用关键词，歧义时用 LLM 兜底。
-    """
+    """Two-layer classification. Uses keywords first, LLM as fallback."""
     result = classify_by_keywords(content, context)
     if result is not None:
         return result

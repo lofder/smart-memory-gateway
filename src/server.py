@@ -1,22 +1,14 @@
-"""Mem0 Engram v3 — MCP Server.
-Mem0 智能记忆网关 v3 — MCP 服务端。
+from __future__ import annotations
+"""Mem0 Smart Memory Gateway v3 — MCP Server.
 
 Scope-aware memory with provenance tracking, permission enforcement,
 degradation strategy, and Qdrant-level metadata management.
-
-支持 scope 隔离的记忆系统，具备来源追踪、权限校验、降级策略和
-基于 Qdrant 的元数据管理能力。
-
-Tools provided / 提供的工具:
-  - mem0_add:         Store a memory with structured provenance / 存储带来源追踪的记忆
-  - mem0_search:      Dual-query search with scope isolation / 双查询搜索，支持 scope 隔离
-  - mem0_get_all:     List all memories with optional scope filter / 列出所有记忆，可按 scope 过滤
-  - mem0_status:      Health check and statistics / 健康检查和统计
-  - mem0_maintenance: Trigger daily/weekly maintenance / 触发每日/每周维护
 """
-import json, os, re, sys, threading, time, uuid
+import fcntl, json, logging, os, re, sys, threading, time, uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger("mem0-gateway")
 
 os.environ.setdefault("NO_PROXY", "localhost,127.0.0.1")
 os.environ.setdefault("no_proxy", "localhost,127.0.0.1")
@@ -33,10 +25,15 @@ HOST_CONFIG_PATH = Path(os.environ.get(
     "ENGRAM_HOST_CONFIG",
     Path.home() / ".mem0-gateway" / "config.json",
 ))
-WRITE_QUEUE_PATH = Path(os.environ.get(
-    "ENGRAM_WRITE_QUEUE",
-    Path.home() / ".mem0-gateway" / "mem0" / "write_queue.jsonl",
+_DATA_DIR = Path(os.environ.get(
+    "ENGRAM_DATA_DIR",
+    Path.home() / ".mem0-gateway" / "mem0",
 ))
+WRITE_QUEUE_PATH = _DATA_DIR / "write_queue.jsonl"
+QUEUE_LOCK_PATH = _DATA_DIR / ".write_queue.lock"
+WRITE_QUEUE_PROCESSING = WRITE_QUEUE_PATH.with_suffix(".processing.jsonl")
+MAX_REPLAY_BATCH = 20
+MAX_REPLAY_SECONDS = 15
 ENV_PATHS = [
     Path.home() / ".mem0-gateway" / ".env",
     Path.home() / ".mem0-gateway" / ".env.main",
@@ -118,11 +115,18 @@ def _build_primary_embedder_config(emb_primary):
         )
         if api_key:
             config["config"]["api_key"] = api_key
+    elif emb_primary["provider"] == "openai":
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("EMBEDDING_API_KEY")
+        if api_key:
+            config["config"]["api_key"] = api_key
+        base_url = emb_primary.get("base_url")
+        if base_url:
+            config["config"]["openai_base_url"] = base_url
     return config
 
 
 def _build_fallback_embedder_config(emb_fallback, provider):
-    api_key = provider.get("apiKey") or os.environ.get("LINGYUN_GEMINI_API_KEY")
+    api_key = provider.get("apiKey") or os.environ.get("EMBEDDING_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
     return {
@@ -145,19 +149,34 @@ def _init_backends():
         from mem0 import Memory
         _load_env_layers()
         if HOST_CONFIG_PATH.exists():
-            oc = json.load(open(HOST_CONFIG_PATH))
+            with open(HOST_CONFIG_PATH) as _hc:
+                oc = json.load(_hc)
         else:
             oc = {}
             sys.stderr.write(f"engram: {HOST_CONFIG_PATH} not found, using env vars only\n")
         emb_primary = CFG["embedding"]["primary"]
         emb_fallback = CFG["embedding"]["fallback"]
         q_cfg = CFG["qdrant"]
-        lingyun_provider = _resolved_provider(oc, "lingyun-gemini")
+        llm_cfg = CFG.get("llm", {})
+        llm_provider_name = llm_cfg.get("provider_name", "default")
+        llm_provider = _resolved_provider(oc, llm_provider_name) if oc else {}
+
+        embedder_cfg_name = CFG["embedding"].get("provider_name", "default")
+        emb_provider = _resolved_provider(oc, embedder_cfg_name) if oc else {}
 
         embedder_config = _build_primary_embedder_config(emb_primary)
-        # Store fallback config for degradation
         global _emb_fallback_config
-        _emb_fallback_config = _build_fallback_embedder_config(emb_fallback, lingyun_provider)
+        _emb_fallback_config = _build_fallback_embedder_config(emb_fallback, emb_provider)
+
+        llm_api_key = (
+            llm_provider.get("apiKey")
+            or os.environ.get("LLM_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+        )
+        llm_base_url = _normalize_openai_base_url(
+            llm_provider.get("baseUrl") or llm_cfg.get("base_url", ""),
+            llm_cfg.get("base_url", "https://api.openai.com/v1"),
+        )
 
         mem_config = {
             "vector_store": {"provider": "qdrant", "config": {
@@ -166,12 +185,9 @@ def _init_backends():
                 "port": q_cfg["port"],
             }},
             "llm": {"provider": "openai", "config": {
-                "model": "gemini-2.5-flash",
-                "api_key": lingyun_provider.get("apiKey") or os.environ.get("LINGYUN_GEMINI_API_KEY"),
-                "openai_base_url": _normalize_openai_base_url(
-                    lingyun_provider.get("baseUrl"),
-                    "https://your-proxy.example.com/v1",
-                ),
+                "model": llm_cfg.get("model", "gpt-4o-mini"),
+                "api_key": llm_api_key,
+                "openai_base_url": llm_base_url,
             }},
             "embedder": embedder_config,
             "version": "v1.1",
@@ -194,6 +210,12 @@ def _init_backends():
                 ) from fallback_error
         _qdrant = QdrantClient(host=q_cfg["host"], port=q_cfg["port"])
         sys.stderr.write(f"mem0-gateway: initialized OK\n")
+        # Start async replay timer after successful init
+        try:
+            _replay_write_queue(_memory)
+        except Exception:
+            pass
+        _schedule_next_timer()
     except Exception as e:
         _init_error = str(e)
         sys.stderr.write(f"mem0-gateway: init FAILED: {e}\n")
@@ -203,7 +225,57 @@ def _init_backends():
 
 threading.Thread(target=_init_backends, daemon=True).start()
 
-mcp = FastMCP("mem0-gateway")
+# --- Phase 3: Async replay timer + graceful shutdown ---
+_replay_lock = threading.Lock()
+_shutdown = threading.Event()
+
+
+def _schedule_next_timer():
+    """Schedule next replay timer. try/except prevents permanent chain breakage."""
+    if _shutdown.is_set():
+        return
+    try:
+        t = threading.Timer(60, _replay_timer_callback)
+        t.daemon = True
+        t.start()
+    except Exception as e:
+        sys.stderr.write(f"mem0-gateway: timer schedule failed: {e}\n")
+        try:
+            time.sleep(5)
+            t = threading.Timer(60, _replay_timer_callback)
+            t.daemon = True
+            t.start()
+        except Exception:
+            sys.stderr.write("mem0-gateway: CRITICAL: replay timer permanently broken\n")
+
+
+def _replay_timer_callback():
+    if not _replay_lock.acquire(blocking=False):
+        _schedule_next_timer()
+        return
+    try:
+        mem, _ = _get_backends()
+        if mem:
+            _replay_write_queue(mem)
+    except Exception as e:
+        sys.stderr.write(f"mem0-gateway: replay timer error: {e}\n")
+    finally:
+        _replay_lock.release()
+        _schedule_next_timer()
+
+
+def _handle_sigterm(signum, frame):
+    _shutdown.set()
+    sys.stderr.write("mem0-gateway: SIGTERM received, shutting down\n")
+    sys.exit(0)
+
+
+import signal
+signal.signal(signal.SIGTERM, _handle_sigterm)
+# --- End Phase 3 infrastructure ---
+
+
+mcp = FastMCP("engram")
 
 
 def _get_backends():
@@ -229,7 +301,7 @@ def _point_to_memory_item(point):
     }
 
 
-def _load_all_memories_from_qdrant(qc, user_id="default", scope="", include_archived=True):
+def _load_all_memories_from_qdrant(qc, user_id="main", scope="", include_archived=True):
     collection = CFG["qdrant"]["collection"]
     offset = None
     items = []
@@ -299,11 +371,22 @@ def _check_never_store(content: str) -> str | None:
 
 def _do_search(mem, query, filters, limit):
     try:
-        results = mem.search(query, user_id="default", limit=limit, filters=filters or None)
+        results = mem.search(query, user_id="main", limit=limit, filters=filters or None)
         items = results if isinstance(results, list) else results.get("results", [])
         return items
-    except Exception:
+    except Exception as e:
+        logger.warning("mem0_search failed: %s", e)
         return []
+
+
+def _safe_queue_size():
+    """Read write queue size with TOCTOU protection."""
+    try:
+        if WRITE_QUEUE_PATH.exists():
+            return sum(1 for _ in open(WRITE_QUEUE_PATH))
+        return 0
+    except (FileNotFoundError, OSError):
+        return 0
 
 
 def _interleave(scoped, global_items, limit):
@@ -316,32 +399,150 @@ def _interleave(scoped, global_items, limit):
             x.get("score", 0),
         ), reverse=True):
             mid = item.get("id", "")
-            if mid not in seen:
+            if mid and mid not in seen:
                 seen.add(mid)
                 merged.append(item)
     return merged[:limit]
 
 
-def _replay_write_queue(mem):
-    if not WRITE_QUEUE_PATH.exists():
-        return
-    remaining = []
-    replayed = 0
-    for line in WRITE_QUEUE_PATH.read_text().strip().split("\n"):
-        if not line.strip():
-            continue
+
+def _acquire_queue_lock(blocking=False, timeout_s=1):
+    """Acquire queue lock. Non-blocking by default for replay; short-timeout blocking for append."""
+    QUEUE_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(QUEUE_LOCK_PATH), os.O_CREAT | os.O_WRONLY, 0o644)
+    if not blocking:
         try:
-            entry = json.loads(line)
-            mem.add(entry["content"], user_id="default", metadata=entry["metadata"])
-            replayed += 1
-        except Exception:
-            remaining.append(line)
-    if remaining:
-        WRITE_QUEUE_PATH.write_text("\n".join(remaining) + "\n")
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except (BlockingIOError, OSError):
+            os.close(fd)
+            return -1
     else:
-        WRITE_QUEUE_PATH.unlink(missing_ok=True)
-    if replayed:
-        sys.stderr.write(f"mem0-gateway: replayed {replayed} queued writes\n")
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return fd
+            except BlockingIOError:
+                time.sleep(0.05)
+        os.close(fd)
+        return -1
+
+
+def _release_queue_lock(fd):
+    if fd >= 0:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+        except OSError:
+            pass
+
+
+def _safe_queue_append(entry: dict):
+    """Append entry to write queue with flock protection against inode race."""
+    try:
+        data = json.dumps(entry, ensure_ascii=False) + "\n"
+    except (TypeError, ValueError):
+        return
+    fd = _acquire_queue_lock(blocking=True, timeout_s=1)
+    if fd < 0:
+        sys.stderr.write("mem0-gateway: queue lock timeout, dropping entry\n")
+        return
+    try:
+        WRITE_QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if WRITE_QUEUE_PATH.exists() and WRITE_QUEUE_PATH.stat().st_size > 10_000_000:
+                sys.stderr.write("mem0-gateway: write queue full (10MB), dropping entry\n")
+                return
+        except OSError:
+            pass
+        try:
+            with open(WRITE_QUEUE_PATH, "a") as f:
+                f.write(data)
+        except OSError as e:
+            sys.stderr.write(f"mem0-gateway: queue append failed: {e}\n")
+    finally:
+        _release_queue_lock(fd)
+
+
+def _replay_write_queue(mem):
+    """Replay queued writes with flock, rename-then-process, and per-entry ack."""
+    if not WRITE_QUEUE_PATH.exists() and not WRITE_QUEUE_PROCESSING.exists():
+        return
+    fd = _acquire_queue_lock(blocking=False)
+    if fd < 0:
+        return
+
+    try:
+        # Crash recovery: merge leftover .processing back into queue
+        if WRITE_QUEUE_PROCESSING.exists():
+            try:
+                data = WRITE_QUEUE_PROCESSING.read_text()
+                if data.strip():
+                    with open(WRITE_QUEUE_PATH, "a") as f:
+                        f.write(data if data.endswith("\n") else data + "\n")
+                WRITE_QUEUE_PROCESSING.unlink(missing_ok=True)
+            except (FileNotFoundError, OSError):
+                pass
+
+        if not WRITE_QUEUE_PATH.exists():
+            return
+
+        # Atomic rename under lock
+        try:
+            WRITE_QUEUE_PATH.rename(WRITE_QUEUE_PROCESSING)
+        except (FileNotFoundError, OSError):
+            return
+
+        # Release lock so agents can create new queue file
+        _release_queue_lock(fd)
+        fd = -1
+
+        # Process .processing file
+        remaining, replayed, t0 = [], 0, time.monotonic()
+        try:
+            all_lines = [l for l in WRITE_QUEUE_PROCESSING.read_text().strip().split("\n") if l.strip()]
+        except (FileNotFoundError, OSError):
+            return
+
+        for i, line in enumerate(all_lines):
+            if replayed >= MAX_REPLAY_BATCH or (time.monotonic() - t0) > MAX_REPLAY_SECONDS:
+                remaining.extend(all_lines[i:])
+                break
+            try:
+                entry = json.loads(line)
+                mem.add(entry["content"], user_id="main", metadata=entry["metadata"])
+                replayed += 1
+                # Per-entry ack: truncate .processing to remaining lines
+                try:
+                    rest = all_lines[i+1:]
+                    if rest:
+                        WRITE_QUEUE_PROCESSING.write_text("\n".join(r for r in rest if r.strip()) + "\n")
+                    else:
+                        WRITE_QUEUE_PROCESSING.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            except json.JSONDecodeError:
+                pass
+            except Exception:
+                remaining.append(line)
+
+        # Put remaining entries back into queue (re-acquire lock)
+        if remaining:
+            fd2 = _acquire_queue_lock(blocking=True, timeout_s=2)
+            try:
+                with open(WRITE_QUEUE_PATH, "a") as f:
+                    f.write("\n".join(r for r in remaining if r.strip()) + "\n")
+            except OSError as e:
+                sys.stderr.write(f"mem0-gateway: failed to write back remaining: {e}\n")
+            finally:
+                _release_queue_lock(fd2)
+        WRITE_QUEUE_PROCESSING.unlink(missing_ok=True)
+
+        if replayed:
+            sys.stderr.write(f"mem0-gateway: replayed {replayed} queued writes\n")
+    finally:
+        _release_queue_lock(fd)
 
 
 def _bump_access_count(qc, collection, ids):
@@ -360,7 +561,7 @@ def _bump_access_count(qc, collection, ids):
 @mcp.tool()
 def mem0_add(content: str, scope: str = "", context: str = "",
              source: str = "agent_output", trust: str = "medium",
-             mem_type: str = "", agent: str = "default") -> str:
+             mem_type: str = "", agent: str = "main") -> str:
     """Add a memory with structured provenance and scope isolation."""
     if not scope:
         return json.dumps({"error": "scope is required. Use global/group:oc_xxx/dm/agent:xxx"})
@@ -393,31 +594,28 @@ def mem0_add(content: str, scope: str = "", context: str = "",
     if mem is None:
         write_id = str(uuid.uuid4())
         entry = {"write_id": write_id, "content": content, "metadata": metadata, "ts": datetime.now(timezone.utc).isoformat()}
-        WRITE_QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(WRITE_QUEUE_PATH, "a") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        _safe_queue_append(entry)
         return json.dumps({"queued": True, "write_id": write_id, "reason": "Mem0 unavailable, cached for replay"})
 
     try:
-        _replay_write_queue(mem)
-        result = mem.add(content, user_id="default", metadata=metadata, infer=False)
+        result = mem.add(content, user_id="main", metadata=metadata, infer=False)
         return json.dumps(result, default=str, ensure_ascii=False)
     except Exception as e:
         write_id = str(uuid.uuid4())
         entry = {"write_id": write_id, "content": content, "metadata": metadata, "ts": datetime.now(timezone.utc).isoformat()}
-        with open(WRITE_QUEUE_PATH, "a") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        _safe_queue_append(entry)
         return json.dumps({"queued": True, "write_id": write_id, "error": str(e)})
 
 
 @mcp.tool()
 def mem0_search(query: str, scope: str = "global", mem_type: str = "",
-                trust_min: str = "", limit: int = 5, agent: str = "default") -> str:
+                trust_min: str = "", limit: int = 5, agent: str = "main") -> str:
     """Search memories with scope isolation and dual-query merge."""
     perm_err = _check_permission(agent, "read", scope, "")
     if perm_err:
         return json.dumps({"error": perm_err})
 
+    limit = max(1, min(limit, 50))
     mem, qc = _get_backends()
     if mem is None:
         return json.dumps({"results": [], "degraded": True, "reason": _init_error or "Mem0 unavailable"})
@@ -462,8 +660,12 @@ def mem0_search(query: str, scope: str = "global", mem_type: str = "",
 
 
 @mcp.tool()
-def mem0_get_all(user_id: str = "default", scope: str = "", agent: str = "default") -> str:
+def mem0_get_all(user_id: str = "main", scope: str = "", agent: str = "main") -> str:
     """Get all memories, optionally filtered by scope."""
+    effective_scope = scope if scope else "all"
+    perm_err = _check_permission(agent, "read", effective_scope, "")
+    if perm_err:
+        logger.warning("AUDIT: %s get_all denied scope=%s: %s", agent, effective_scope, perm_err)
     mem, qc = _get_backends()
     if mem is None and qc is None:
         return json.dumps({"error": "Mem0 unavailable"})
@@ -483,7 +685,7 @@ def mem0_get_all(user_id: str = "default", scope: str = "", agent: str = "defaul
 
 
 @mcp.tool()
-def mem0_status(agent: str = "default") -> str:
+def mem0_status(agent: str = "main") -> str:
     """Health check: total memories, scope/type distribution, Qdrant status."""
     mem, qc = _get_backends()
     status = {
@@ -497,12 +699,12 @@ def mem0_status(agent: str = "default") -> str:
     try:
         sdk_count = None
         if mem is not None:
-            all_mem = mem.get_all(user_id="default")
+            all_mem = mem.get_all(user_id="main")
             sdk_items = all_mem if isinstance(all_mem, list) else all_mem.get("results", [])
             sdk_count = len(sdk_items)
 
         if qc is not None:
-            items = _load_all_memories_from_qdrant(qc, user_id="default", include_archived=True)
+            items = _load_all_memories_from_qdrant(qc, user_id="main", include_archived=True)
             status["inventory_source"] = "qdrant_scroll"
         else:
             items = sdk_items
@@ -529,7 +731,7 @@ def mem0_status(agent: str = "default") -> str:
             "by_scope": by_scope,
             "by_type": by_type,
             "by_trust": by_trust,
-            "write_queue_size": sum(1 for _ in open(WRITE_QUEUE_PATH)) if WRITE_QUEUE_PATH.exists() else 0,
+            "write_queue_size": _safe_queue_size(),
             "config_version": CFG.get("config_version"),
             "schema_version": CFG.get("schema_version"),
             "embedding_model": CFG["embedding"]["model"],
@@ -544,7 +746,7 @@ def mem0_status(agent: str = "default") -> str:
 
 
 @mcp.tool()
-def mem0_maintenance(mode: str = "daily", agent: str = "default") -> str:
+def mem0_maintenance(mode: str = "daily", agent: str = "main") -> str:
     """Run memory maintenance. mode: daily/weekly/report_only.
     daily: Opus re-extract today's memories + dedup + report.
     weekly: daily + consolidation + conflict detection + decay + timeline.
@@ -572,21 +774,17 @@ def mem0_maintenance(mode: str = "daily", agent: str = "default") -> str:
 
         report["completed_at"] = datetime.now(timezone.utc).isoformat()
 
-        # Send Feishu notification (non-blocking)
-        def _send_report():
-            try:
-                import subprocess
-                msg = f"[记忆维护报告] {report.get('started_at', '')[:10]} ({mode})\n"
-                msg += f"触发者: {agent}\n"
-                msg += json.dumps(report, ensure_ascii=False, indent=2, default=str)[:1500]
-                subprocess.run(
-                    ["echo", msg]  # Replace with your notification command,
-                    timeout=15, capture_output=True,
-                    env={**os.environ, "PATH": "/usr/local/bin:" + os.environ.get("PATH", "")}
-                )
-            except Exception:
-                pass
-        threading.Thread(target=_send_report, daemon=True).start()
+        webhook_url = CFG.get("notification", {}).get("webhook_url", "")
+        if webhook_url:
+            def _send_webhook():
+                try:
+                    import urllib.request
+                    body = json.dumps({"text": json.dumps(report, ensure_ascii=False, indent=2, default=str)[:2000]}).encode()
+                    req = urllib.request.Request(webhook_url, data=body, headers={"Content-Type": "application/json"})
+                    urllib.request.urlopen(req, timeout=15)
+                except Exception:
+                    pass
+            threading.Thread(target=_send_webhook, daemon=True).start()
 
         return json.dumps(report, default=str, ensure_ascii=False)
 

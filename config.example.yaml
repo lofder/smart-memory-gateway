@@ -1,3 +1,9 @@
+# ============================================================
+# Engram — config.yaml
+# Copy this file to config.yaml and customize.
+# ============================================================
+
+# --- Agent permissions: who can read/write where ---
 agents:
   main:
     read: [global, "group:*", dm, "agent:*", all, "cross:*"]
@@ -7,44 +13,18 @@ agents:
     read: [global, "group:*", dm, "agent:*", all, "cross:*"]
     write: [global, "group:*", dm, "agent:*", all, "cross:*"]
     allowed_types: [preference, fact, procedure, lesson, decision, task_log, knowledge]
-  monitor:
-    read: [global]
-    write: [global]
-    allowed_types: [procedure, lesson]
-  writer:
-    read: []
-    write: ["agent:writer"]
-    allowed_types: [procedure, task_log]
-  creator:
-    read: []
-    write: ["agent:creator"]
-    allowed_types: [procedure, task_log]
-  collector:
-    read: []
-    write: ["agent:collector"]
-    allowed_types: [procedure, task_log]
-  browser:
-    read: []
-    write: ["agent:browser"]
-    allowed_types: [procedure, task_log]
-  analyst:
-    read: []
-    write: ["agent:analyst"]
-    allowed_types: [procedure, task_log]
-  text-reviewer:
-    read: []
-    write: ["agent:text-reviewer"]
-    allowed_types: [procedure, task_log]
-  visual-reviewer:
-    read: []
-    write: ["agent:visual-reviewer"]
-    allowed_types: [procedure, task_log]
+  # Add more agents as needed:
+  # worker:
+  #   read: []
+  #   write: ["agent:worker"]
+  #   allowed_types: [procedure, task_log]
 
 default_agent_policy:
   read: [global]
   write: []
   allowed_types: []
 
+# --- Memory type definitions ---
 memory_types:
   preference: {decay: never, conflict: update_latest}
   fact: {decay: never, conflict: verify_source}
@@ -54,22 +34,34 @@ memory_types:
   decision: {decay: never, conflict: no_override}
   knowledge: {decay: never, conflict: merge_latest}
 
+# --- LLM for day-to-day operations (Mem0 internal use) ---
+llm:
+  model: gpt-4o-mini
+  base_url: https://api.openai.com/v1
+  # If using host config.json providers, set this:
+  # provider_name: your-provider
+
+# --- Maintenance settings ---
 maintenance:
   daily_time: "03:00"
   weekly_day: sunday
   weekly_window_minutes: 30
   dedup_auto_threshold: 0.92
   dedup_candidate_threshold: 0.85
+  # LLM chain for maintenance (re-extraction, conflict resolution, consolidation)
+  # Format: provider-name/model-name — tries in order, falls back on failure
   llm_chain:
-    - your-provider/claude-opus-4-6
-    - your-provider-2/claude-opus-4-6
-    - your-provider-3/claude-opus-4-6
-    - your-provider-4/gpt-5.4
+    - default/gpt-4o
+  # Base URL for maintenance LLM (fallback if provider not in host config)
+  llm_base_url: https://api.openai.com/v1
 
 quality_tier: high
 
+# --- Embedding configuration ---
 embedding:
   model: models/gemini-embedding-001
+  # If using host config.json providers for embedding fallback:
+  # provider_name: your-provider
   primary:
     provider: gemini
     model: models/gemini-embedding-001
@@ -80,17 +72,20 @@ embedding:
     base_url: https://your-embedding-proxy.com/v1
     dimensions: 3072
 
+# --- Qdrant vector database ---
 qdrant:
   host: localhost
   port: 6333
   collection: memories
 
+# --- Decay parameters ---
 decay:
   task_log_half_life_days: 30
   procedure_half_life_days: 90
   access_count_cap: 3.0
   archive_threshold: 0.10
 
+# --- Credential safety: matching patterns are NEVER stored ---
 never_store_patterns:
   - 'sk-[A-Za-z0-9]{20,}'
   - 'AIza[0-9A-Za-z_-]{20,}'
@@ -99,5 +94,9 @@ never_store_patterns:
   - 'cookie\s*[:=]\s*\S+'
   - '-----BEGIN\s+(RSA\s+)?PRIVATE'
 
+# --- Optional: webhook notification (Slack, Feishu, Discord, etc.) ---
+# notification:
+#   webhook_url: https://hooks.slack.com/services/xxx/yyy/zzz
+
 schema_version: 1
-config_version: 1
+config_version: 2

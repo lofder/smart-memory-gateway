@@ -299,14 +299,16 @@ cd Engram
 
 This creates `config.yaml` and `.env` from templates. You'll be asked to choose Docker or Local mode.
 
-### Step 3: Set your API key
+### Step 3: Set your API keys
 
 Edit `.env`:
 ```bash
-GOOGLE_API_KEY=your-google-api-key-here
+GOOGLE_API_KEY=your-google-api-key-here    # For Gemini embeddings
+LLM_API_KEY=your-llm-api-key-here          # For Mem0 inference + maintenance
 ```
 
-This key is used for `gemini-embedding-001` embeddings. Get one at [Google AI Studio](https://aistudio.google.com/apikey).
+`GOOGLE_API_KEY` is used for `gemini-embedding-001` embeddings — get one at [Google AI Studio](https://aistudio.google.com/apikey).
+`LLM_API_KEY` (or `OPENAI_API_KEY`) is used by Mem0 for memory operations and by maintenance for re-extraction.
 
 ### Step 4: Start
 
@@ -343,6 +345,7 @@ docker compose logs engram | tail -5
       "args": ["/absolute/path/to/Engram/src/server.py"],
       "env": {
         "GOOGLE_API_KEY": "your-key",
+        "LLM_API_KEY": "your-llm-key",
         "NO_PROXY": "localhost,127.0.0.1"
       }
     }
@@ -358,7 +361,8 @@ docker compose logs engram | tail -5
       "command": "python",
       "args": ["/absolute/path/to/Engram/src/server.py"],
       "env": {
-        "GOOGLE_API_KEY": "your-key"
+        "GOOGLE_API_KEY": "your-key",
+        "LLM_API_KEY": "your-llm-key"
       }
     }
   }
@@ -478,6 +482,7 @@ See [docs/configuration.md](docs/configuration.md) for the full reference.
 
 ## Documentation
 
+- [Changelog](CHANGELOG.md) — Version history and migration notes
 - [Architecture v2](ARCHITECTURE-v2.md) — Full architecture with design goals analysis
 - [Design Document (中文)](docs/design_cn.md) — 9-chapter system design
 - [Usage Guide](docs/usage.md) — Integration guide
@@ -673,10 +678,12 @@ cd Engram
 
 编辑 `.env`：
 ```bash
-GOOGLE_API_KEY=你的-google-api-key
+GOOGLE_API_KEY=你的-google-api-key          # 用于 Gemini embedding
+LLM_API_KEY=你的-llm-api-key               # 用于 Mem0 推理 + 维护
 ```
 
-用于 `gemini-embedding-001` 向量化。在 [Google AI Studio](https://aistudio.google.com/apikey) 获取。
+`GOOGLE_API_KEY` 用于 `gemini-embedding-001` 向量化，在 [Google AI Studio](https://aistudio.google.com/apikey) 获取。
+`LLM_API_KEY`（或 `OPENAI_API_KEY`）用于 Mem0 的记忆操作和维护脚本的重提取。
 
 ### 第 4 步：启动
 
@@ -709,6 +716,7 @@ docker compose logs engram | tail -5
       "args": ["/absolute/path/to/Engram/src/server.py"],
       "env": {
         "GOOGLE_API_KEY": "your-key",
+        "LLM_API_KEY": "your-llm-key",
         "NO_PROXY": "localhost,127.0.0.1"
       }
     }
@@ -805,6 +813,7 @@ never_store_patterns:
 
 ## 文档
 
+- [更新日志](CHANGELOG.md) — 版本历史和迁移说明
 - [架构详解 (v2)](ARCHITECTURE-v2.md) — 完整架构，含三个设计目标分析
 - [设计文档](docs/design_cn.md) — 9 章系统设计
 - [使用指南](docs/usage.md) — 集成指南

@@ -1,11 +1,25 @@
 #!/bin/bash
-# Engram v3 - Daily Qdrant backup
-export NO_PROXY=localhost,127.0.0.1
-BACKUP_DIR="$HOME/.mem0-gateway/mem0/backups"
-LOG_FILE="$HOME/.mem0-gateway/logs/backup.log"
-mkdir -p "$BACKUP_DIR"
+# Engram — Daily Qdrant backup script
+# Called by cron. Creates a Qdrant snapshot and keeps last 7 days.
 
-RESP=$(curl -s -X POST http://localhost:6333/collections/memories/snapshots)
+set -euo pipefail
+
+export NO_PROXY=localhost,127.0.0.1
+export no_proxy=localhost,127.0.0.1
+
+# Read collection name from config (default: memories)
+ENGRAM_DIR="${ENGRAM_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+COLLECTION="${ENGRAM_COLLECTION:-memories}"
+QDRANT_HOST="${QDRANT_HOST:-localhost}"
+QDRANT_PORT="${QDRANT_PORT:-6333}"
+DATA_DIR="${ENGRAM_DATA_DIR:-$HOME/.mem0-gateway/mem0}"
+BACKUP_DIR="$DATA_DIR/backups"
+LOG_DIR="${ENGRAM_LOG_DIR:-$HOME/.mem0-gateway/logs}"
+LOG_FILE="$LOG_DIR/backup.log"
+
+mkdir -p "$BACKUP_DIR" "$LOG_DIR"
+
+RESP=$(curl -s -X POST "http://${QDRANT_HOST}:${QDRANT_PORT}/collections/${COLLECTION}/snapshots")
 SNAP_NAME=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['name'])" 2>/dev/null)
 
 if [ -z "$SNAP_NAME" ]; then
@@ -13,8 +27,9 @@ if [ -z "$SNAP_NAME" ]; then
     exit 1
 fi
 
-SNAP_DIR="$HOME/.mem0-gateway/mem0/qdrant_server_data/snapshots/memories"
-cp "$SNAP_DIR/$SNAP_NAME" "$BACKUP_DIR/" 2>/dev/null
+# Download snapshot via Qdrant HTTP API
+curl -s -o "$BACKUP_DIR/$SNAP_NAME" \
+  "http://${QDRANT_HOST}:${QDRANT_PORT}/collections/${COLLECTION}/snapshots/${SNAP_NAME}" 2>/dev/null
 
 # Keep last 7 days
 find "$BACKUP_DIR" -name "*.snapshot" -mtime +7 -delete 2>/dev/null

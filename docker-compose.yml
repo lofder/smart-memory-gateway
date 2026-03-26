@@ -16,9 +16,12 @@ services:
       - .env
     environment:
       - ENGRAM_CONFIG=/app/config.yaml
+      - ENGRAM_DATA_DIR=/data/engram
     volumes:
       - ./config.yaml:/app/config.yaml:ro
+      - engram_data:/data/engram
     restart: unless-stopped
 
 volumes:
   qdrant_data:
+  engram_data:

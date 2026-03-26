@@ -1,6 +1,5 @@
 from __future__ import annotations
-"""Consolidation engine — merge related memories into knowledge summaries.
-巩固引擎 — 将相关记忆合并为知识摘要。
+"""Consolidation engine: merge related memories into knowledge summaries.
 
 Adapted from smart-memory/cognition/memory_consolidation_agent.py with:
 - LLM-based semantic summary (not simple text concatenation)
@@ -15,33 +14,67 @@ def find_consolidation_groups(
     memories: list[dict],
     similarity_threshold: float = 0.80,
     min_group_size: int = 3,
+    max_groups: int = 10,
 ) -> list[list[dict]]:
-    """Group memories by shared entities/topics for consolidation.
-    按共享实体/主题对记忆分组，准备巩固。
+    """Group task_log memories by content similarity using keyword overlap.
 
-    Simple heuristic: group by first entity or by similar content keywords.
+    Uses a Union-Find approach with keyword-based similarity as a proxy
+    for semantic similarity. Limited to max_groups to bound LLM calls.
     """
-    groups: dict[str, list[dict]] = {}
-
+    candidates = []
     for mem in memories:
         meta = mem.get("metadata", {})
         if meta.get("mem_type") != "task_log":
             continue
         if meta.get("archived"):
             continue
+        candidates.append(mem)
 
-        content = mem.get("memory", "")
-        key_words = set(content[:50].split())
-        group_key = "_".join(sorted(list(key_words)[:3])) if key_words else "_ungrouped"
+    if not candidates:
+        return []
 
-        groups.setdefault(group_key, []).append(mem)
+    # Union-Find for grouping
+    parent = list(range(len(candidates)))
 
-    return [g for g in groups.values() if len(g) >= min_group_size]
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    # Group by keyword overlap (cheap proxy for semantic similarity)
+    def _keywords(text):
+        return set(w.lower() for w in text.split() if len(w) > 3)
+
+    kw_cache = [_keywords(c.get("memory", "")[:200]) for c in candidates]
+
+    for i in range(len(candidates)):
+        for j in range(i + 1, min(i + 50, len(candidates))):
+            if not kw_cache[i] or not kw_cache[j]:
+                continue
+            overlap = len(kw_cache[i] & kw_cache[j])
+            total = len(kw_cache[i] | kw_cache[j])
+            if total > 0 and overlap / total >= 0.3:
+                union(i, j)
+
+    # Collect groups
+    groups_map: dict[int, list[dict]] = {}
+    for i, mem in enumerate(candidates):
+        root = find(i)
+        groups_map.setdefault(root, []).append(mem)
+
+    result = [g for g in groups_map.values() if len(g) >= min_group_size]
+    result.sort(key=len, reverse=True)
+    return result[:max_groups]
 
 
 def consolidate_group(memories: list[dict], llm_call, scope: str) -> dict | None:
     """Consolidate a group of memories into a single knowledge summary.
-    将一组记忆巩固为单条知识摘要。
 
     Args:
         memories: List of related memories to consolidate
@@ -82,13 +115,22 @@ Memories:
 
 
 def mark_consolidated_sources(source_ids: list[str], new_memory_id: str, qdrant_client, collection: str):
-    """Mark original memories as consolidated (accelerated decay, not deleted).
-    标记原始记忆为已巩固（加速衰减，不硬删）。"""
+    """Mark original memories as consolidated and archived."""
+    # Verify the new knowledge memory actually exists before archiving sources
+    try:
+        verify = qdrant_client.retrieve(collection_name=collection, ids=[new_memory_id], with_payload=True)
+        if not verify:
+            import sys
+            sys.stderr.write(f"consolidation: cannot archive sources — new memory {new_memory_id} not found\n")
+            return
+    except Exception:
+        return
+
     for sid in source_ids:
         try:
             qdrant_client.set_payload(
                 collection_name=collection,
-                payload={"consolidated_into": new_memory_id},
+                payload={"consolidated_into": new_memory_id, "archived": True},
                 points=[sid],
             )
         except Exception:

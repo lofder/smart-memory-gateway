@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Memory maintenance script for Engram v3.
-记忆维护脚本 — 智能记忆网关 v3。
+"""Memory maintenance script for Smart Memory Gateway v3.
 
-Usage / 用法:
-    python3 maintenance.py --mode daily        # Opus re-extract + dedup + report / Opus 重提取 + 去重 + 报告
-    python3 maintenance.py --mode weekly       # daily + consolidation + conflict + decay / 每日 + 巩固 + 冲突 + 衰减
-    python3 maintenance.py --mode report_only  # Just report, no changes / 仅报告，不做修改
+Usage:
+    python3 maintenance.py --mode daily        # Opus re-extract + dedup + report
+    python3 maintenance.py --mode weekly       # daily + consolidation + conflict + decay
+    python3 maintenance.py --mode report_only  # Just report, no changes
 
 Designed to be called by cron or manually via MCP tool.
-设计为由 cron 自动触发或通过 MCP 工具手动调用。
 """
 import argparse, json, os, re, subprocess, sys, time
 from datetime import datetime, timezone, timedelta
@@ -23,10 +21,20 @@ import yaml
 from mem0 import Memory
 from qdrant_client import QdrantClient
 
-CONFIG_PATH = Path(__file__).parent / "config.yaml"
-HOST_CONFIG_PATH = Path.home() / ".mem0-gateway" / "config.json"
-PLAN_DIR = Path.home() / ".mem0-gateway" / "mem0" / "maintenance_plans"
-REPORT_DIR = Path.home() / ".mem0-gateway" / "mem0" / "maintenance_reports"
+CONFIG_PATH = Path(os.environ.get(
+    "ENGRAM_CONFIG",
+    Path(__file__).parent.parent / "config.yaml",
+))
+HOST_CONFIG_PATH = Path(os.environ.get(
+    "ENGRAM_HOST_CONFIG",
+    Path.home() / ".mem0-gateway" / "config.json",
+))
+_DATA_DIR = Path(os.environ.get(
+    "ENGRAM_DATA_DIR",
+    Path.home() / ".mem0-gateway" / "mem0",
+))
+PLAN_DIR = _DATA_DIR / "maintenance_plans"
+REPORT_DIR = _DATA_DIR / "maintenance_reports"
 ENV_PATHS = [
     Path.home() / ".mem0-gateway" / ".env",
     Path.home() / ".mem0-gateway" / ".env.main",
@@ -100,13 +108,24 @@ def _build_primary_embedder_config():
         )
         if api_key:
             config["config"]["api_key"] = api_key
+    elif emb_primary["provider"] == "openai":
+        api_key = (
+            os.environ.get("OPENAI_API_KEY")
+            or os.environ.get("EMBEDDING_API_KEY")
+        )
+        if api_key:
+            config["config"]["api_key"] = api_key
+        base_url = emb_primary.get("base_url")
+        if base_url:
+            config["config"]["openai_base_url"] = base_url
     return config
 
 
 def _build_fallback_embedder_config(oc):
     emb_fallback = CFG["embedding"]["fallback"]
-    provider = _resolved_provider(oc, "lingyun-gemini")
-    api_key = provider.get("apiKey") or os.environ.get("LINGYUN_GEMINI_API_KEY")
+    embedder_cfg_name = CFG["embedding"].get("provider_name", "default")
+    provider = _resolved_provider(oc, embedder_cfg_name)
+    api_key = provider.get("apiKey") or os.environ.get("EMBEDDING_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
     return {
@@ -151,27 +170,30 @@ def _make_memory_with_embedder_fallback(oc, llm_config):
 
 
 def _make_opus_memory():
-    """Create Memory instance with Opus LLM for high-quality extraction."""
+    """Create Memory instance with high-quality LLM for re-extraction."""
     _load_env_layers()
-    oc = json.load(open(HOST_CONFIG_PATH))
+    if HOST_CONFIG_PATH.exists():
+        with open(HOST_CONFIG_PATH) as _hc:
+            oc = json.load(_hc)
+    else:
+        oc = {}
     llm_chain = CFG.get("maintenance", {}).get("llm_chain", [])
-    model = llm_chain[0] if llm_chain else "claude-opus-4-6"
+    model = llm_chain[0] if llm_chain else "gpt-4o"
     model_name = model.split("/")[-1] if "/" in model else model
-    provider_name = model.split("/")[0] if "/" in model else "your_provider"
+    provider_name = model.split("/")[0] if "/" in model else "default"
 
-    provider = _resolved_provider(
-        oc,
-        provider_name if provider_name in oc["models"]["providers"] else "your_provider",
-    )
+    provider = _resolved_provider(oc, provider_name) if oc.get("models", {}).get("providers", {}) else {}
+
+    llm_base_url = CFG.get("maintenance", {}).get("llm_base_url", "https://api.openai.com/v1")
 
     return _make_memory_with_embedder_fallback(oc, {
         "provider": "openai",
         "config": {
             "model": model_name,
-            "api_key": provider.get("apiKey"),
+            "api_key": provider.get("apiKey") or os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY"),
             "openai_base_url": _normalize_openai_base_url(
-                provider.get("baseUrl"),
-                "https://api.your_provider.top",
+                provider.get("baseUrl") or llm_base_url,
+                llm_base_url,
             ),
         },
     })
@@ -182,19 +204,24 @@ def _make_llm_call(oc):
     import urllib.request, ssl
     llm_chain = CFG.get("maintenance", {}).get("llm_chain", [])
 
+    llm_base_url = CFG.get("maintenance", {}).get("llm_base_url", "https://api.openai.com/v1")
+
     def call(prompt):
         for model_spec in llm_chain:
             parts = model_spec.split("/")
-            provider_name = parts[0] if len(parts) > 1 else "your_provider"
+            provider_name = parts[0] if len(parts) > 1 else "default"
             model_name = parts[-1]
             provider = _resolved_provider(oc, provider_name)
             if not provider:
-                continue
+                api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+                if not api_key:
+                    continue
+                provider = {"apiKey": api_key, "baseUrl": llm_base_url}
             try:
                 body = json.dumps({"model": model_name, "messages": [{"role": "user", "content": prompt}], "max_tokens": 500, "temperature": 0}).encode()
                 base = _normalize_openai_base_url(
                     provider.get("baseUrl"),
-                    "https://api.your_provider.top",
+                    llm_base_url,
                 )
                 url = f"{base}/chat/completions"
                 req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "Authorization": f"Bearer {provider['apiKey']}"})
@@ -226,7 +253,7 @@ def _point_to_memory_item(point):
     }
 
 
-def _load_all_memories_from_qdrant(qc, user_id="default", scope="", include_archived=True):
+def _load_all_memories_from_qdrant(qc, user_id="main", scope="", include_archived=True):
     collection = CFG["qdrant"]["collection"]
     offset = None
     items = []
@@ -256,7 +283,7 @@ def _load_all_memories_from_qdrant(qc, user_id="default", scope="", include_arch
     return items
 
 
-def get_all_memories(m, qc=None, user_id="default", scope="", include_archived=True):
+def get_all_memories(m, qc=None, user_id="main", scope="", include_archived=True):
     if qc is not None:
         return _load_all_memories_from_qdrant(qc, user_id=user_id, scope=scope, include_archived=include_archived)
 
@@ -280,21 +307,51 @@ def get_today_memories(memories):
     return result
 
 
-def step_opus_reextract(opus_mem, memories, report):
-    """Step 1: Re-add today's memories with Opus for better entity extraction."""
+def step_opus_reextract(opus_mem, memories, report, qc=None):
+    """Step 1: Re-add today's memories with Opus — add-then-archive (never delete first)."""
     today_mems = get_today_memories(memories)
     report["re_extract_total"] = len(today_mems)
     ok, fail = 0, 0
+    collection = CFG["qdrant"]["collection"]
 
     for mem in today_mems:
         try:
             content = mem.get("memory", "")
-            metadata = mem.get("metadata", {})
+            metadata = dict(mem.get("metadata", {}))
             mid = mem.get("id", "")
             if not content or not mid:
                 continue
-            opus_mem.delete(mid)
-            opus_mem.add(content, user_id="default", metadata=metadata)
+
+            # Skip if already archived by another process
+            if qc:
+                try:
+                    pts = qc.retrieve(collection_name=collection, ids=[mid], with_payload=True)
+                    if pts and (pts[0].payload or {}).get("archived"):
+                        continue
+                except Exception:
+                    pass
+
+            # Preserve original identity
+            metadata["original_id"] = mid
+            metadata["original_created_at"] = mem.get("created_at", "")
+
+            # Add new version first (safe — old version still exists if this fails)
+            new_result = opus_mem.add(content, user_id="main", metadata=metadata)
+            new_id = ""
+            if isinstance(new_result, dict):
+                results = new_result.get("results", [])
+                if results:
+                    new_id = results[0].get("id", "")
+
+            # Archive old version only after successful add
+            if new_id and qc:
+                try:
+                    qc.set_payload(collection, payload={
+                        "archived": True, "superseded_by": new_id
+                    }, points=[mid])
+                except Exception as e:
+                    report.setdefault("errors", []).append(f"archive old {mid}: {e}")
+
             ok += 1
         except Exception as e:
             fail += 1
@@ -316,7 +373,7 @@ def step_dedup(m, qc, memories, report):
         scope_mems = [m2 for m2 in memories if m2.get("metadata", {}).get("scope") == scope and not m2.get("metadata", {}).get("archived")]
         seen_pairs = set()
         for mem in scope_mems:
-            similar = m.search(mem.get("memory", ""), user_id="default", filters={"scope": scope}, limit=5)
+            similar = m.search(mem.get("memory", ""), user_id="main", filters={"scope": scope}, limit=5)
             items = similar if isinstance(similar, list) else similar.get("results", [])
             for item in items:
                 if item.get("id") == mem.get("id"):
@@ -376,12 +433,12 @@ def step_consolidation(m, qc, memories, llm_call, report):
             result = consolidate_group(group, llm_call, scope)
             if result:
                 try:
-                    new_mem = m.add(result["content"], user_id="default", metadata={
+                    new_mem = m.add(result["content"], user_id="main", metadata={
                         "scope": scope, "mem_type": "knowledge", "source": "consolidation",
                         "trust": "medium", "agent": "maintenance",
                         "consolidated_from": json.dumps(result.get("consolidated_from", [])),
                         "access_count": 0, "archived": False,
-                        "embedding_model": CFG["embedding"]["primary"]["model"],
+                        "embedding_model": CFG["embedding"]["model"],
                         "schema_version": CFG["schema_version"],
                     })
                     new_id = ""
@@ -468,36 +525,72 @@ def send_feishu_report(report):
     if report.get("errors"):
         msg += f"\n错误: {len(report['errors'])} 条\n"
 
-    try:
-        env = {**os.environ, "PATH": "/usr/local/bin:" + os.environ.get("PATH", "")}
-        subprocess.run(["echo", "--text", msg[:2000]], timeout=15, capture_output=True, env=env)
-    except Exception:
-        pass
+    webhook_url = CFG.get("notification", {}).get("webhook_url", "")
+    if webhook_url:
+        try:
+            import urllib.request
+            body = json.dumps({"text": msg[:2000]}).encode()
+            req = urllib.request.Request(webhook_url, data=body, headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=15)
+        except Exception:
+            pass
 
     return msg
 
 
+MAINTENANCE_LOCK = _DATA_DIR / "maintenance.lock"
+
+
 def run(mode="daily"):
+    import fcntl
     t0 = time.time()
+
+    # Python-level flock — prevents concurrent maintenance from any entry point
+    lock_fd = os.open(str(MAINTENANCE_LOCK), os.O_CREAT | os.O_WRONLY, 0o644)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.stderr.write("Another maintenance instance is running. Exiting.\n")
+        os.close(lock_fd)
+        sys.exit(0)
+
+    try:
+        _run_impl(mode, t0)
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            os.close(lock_fd)
+        except OSError:
+            pass
+
+
+def _run_impl(mode, t0):
     report = {"mode": mode, "date": datetime.now().strftime("%Y-%m-%d %H:%M")}
 
     PLAN_DIR.mkdir(parents=True, exist_ok=True)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
     _load_env_layers()
-    oc = json.load(open(HOST_CONFIG_PATH))
+    if HOST_CONFIG_PATH.exists():
+        with open(HOST_CONFIG_PATH) as _hc:
+            oc = json.load(_hc)
+    else:
+        oc = {}
     qc = QdrantClient(host=CFG["qdrant"]["host"], port=CFG["qdrant"]["port"])
 
     if mode == "report_only":
-        lingyun_provider = _resolved_provider(oc, "lingyun-gemini")
+        llm_cfg = CFG.get("llm", {})
+        llm_provider_name = llm_cfg.get("provider_name", "default")
+        llm_provider = _resolved_provider(oc, llm_provider_name) if oc else {}
+        llm_base_url = CFG.get("maintenance", {}).get("llm_base_url", llm_cfg.get("base_url", "https://api.openai.com/v1"))
         m_daily = _make_memory_with_embedder_fallback(oc, {
             "provider": "openai",
             "config": {
-                "model": "gemini-2.5-flash",
-                "api_key": lingyun_provider.get("apiKey") or os.environ.get("LINGYUN_GEMINI_API_KEY"),
+                "model": llm_cfg.get("model", "gpt-4o-mini"),
+                "api_key": llm_provider.get("apiKey") or os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY"),
                 "openai_base_url": _normalize_openai_base_url(
-                    lingyun_provider.get("baseUrl"),
-                    "https://your-proxy.example.com/v1",
+                    llm_provider.get("baseUrl") or llm_base_url,
+                    llm_base_url,
                 ),
             },
         })
@@ -524,20 +617,35 @@ def run(mode="daily"):
 
     # Daily steps (always run)
     print("Step 1: Opus re-extract...")
-    step_opus_reextract(opus_mem, memories, report)
+    step_opus_reextract(opus_mem, memories, report, qc=qc)
 
     memories = get_all_memories(opus_mem, qc=qc)
 
     print("Step 2-3: Dedup...")
     step_dedup(opus_mem, qc, memories, report)
 
+    try:
+        memories = get_all_memories(opus_mem, qc=qc)
+    except Exception as e:
+        print(f"Warning: refresh after dedup failed: {e}, continuing with stale data")
+
     # Weekly steps (only on weekly mode)
     if mode == "weekly":
         print("Step 4: Conflict detection...")
         step_conflict(opus_mem, qc, memories, llm_call, report)
 
+        try:
+            memories = get_all_memories(opus_mem, qc=qc)
+        except Exception as e:
+            print(f"Warning: refresh after conflict failed: {e}, continuing with stale data")
+
         print("Step 5: Consolidation...")
         step_consolidation(opus_mem, qc, memories, llm_call, report)
+
+        try:
+            memories = get_all_memories(opus_mem, qc=qc)
+        except Exception as e:
+            print(f"Warning: refresh after consolidation failed: {e}, continuing with stale data")
 
         print("Step 6: Decay...")
         step_decay(memories, qc, report)

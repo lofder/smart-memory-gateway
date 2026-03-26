@@ -25,14 +25,20 @@ if [ ! -f .env ]; then
     cp .env.example .env
     echo -e "${GREEN}✓${NC} Created .env from template"
     echo ""
-    echo -e "${YELLOW}⚠ You need to edit .env and set your API key:${NC}"
-    echo -e "  ${CYAN}GOOGLE_API_KEY=your-key-here${NC}"
+    echo -e "${YELLOW}⚠ You need to edit .env and set your API keys:${NC}"
+    echo -e "  ${CYAN}GOOGLE_API_KEY=your-google-api-key${NC}  (for embeddings)"
+    echo -e "  ${CYAN}LLM_API_KEY=your-llm-api-key${NC}        (for Mem0 inference)"
     echo ""
 else
     echo -e "${YELLOW}→${NC} .env already exists, skipping"
 fi
 
-# 3. Check for Docker vs local mode
+# 3. Create data directory
+DATA_DIR="${ENGRAM_DATA_DIR:-$HOME/.mem0-gateway/mem0}"
+mkdir -p "$DATA_DIR"
+echo -e "${GREEN}✓${NC} Data directory: $DATA_DIR"
+
+# 4. Choose deployment mode
 echo ""
 echo -e "${CYAN}Choose deployment mode:${NC}"
 echo "  1) Docker Compose (recommended — Qdrant included)"
@@ -61,14 +67,13 @@ if [ "$MODE" = "1" ]; then
     echo -e "${GREEN}Setup complete! Start with:${NC}"
     echo -e "  ${CYAN}docker compose up -d${NC}"
     echo ""
-    echo -e "Then add to your MCP client config (e.g. Cursor settings.json):"
+    echo -e "Then add to your MCP client config (e.g. Cursor mcp.json):"
     echo -e '  "engram": {'
     echo -e '    "command": "docker",'
     echo -e '    "args": ["exec", "-i", "engram-engram-1", "python", "src/server.py"]'
     echo -e '  }'
 
 else
-    # Local mode: keep localhost, install deps
     echo ""
     echo -e "${CYAN}Installing Python dependencies...${NC}"
     pip install -r requirements.txt
@@ -76,17 +81,16 @@ else
 
     echo ""
     echo -e "${GREEN}Setup complete!${NC}"
-    echo -e "1. Start Qdrant:  ${CYAN}./qdrant --config-path qdrant-config.yaml &${NC}"
-    echo -e "   Or Docker:     ${CYAN}docker run -d -p 6333:6333 qdrant/qdrant${NC}"
+    echo -e "1. Start Qdrant:  ${CYAN}docker run -d -p 6333:6333 qdrant/qdrant${NC}"
     echo -e "2. Start Engram:  ${CYAN}python src/server.py${NC}"
     echo ""
     echo -e "Then add to your MCP client config:"
     echo -e '  "engram": {'
     echo -e '    "command": "python",'
     echo -e '    "args": ["'"$(pwd)"'/src/server.py"],'
-    echo -e '    "env": {"GOOGLE_API_KEY": "your-key"}'
+    echo -e '    "env": {"GOOGLE_API_KEY": "your-key", "LLM_API_KEY": "your-key"}'
     echo -e '  }'
 fi
 
 echo ""
-echo -e "${CYAN}Docs: ARCHITECTURE-v2.md | docs/usage.md${NC}"
+echo -e "${CYAN}Docs: README.md | docs/usage.md | docs/configuration.md${NC}"
