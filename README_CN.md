@@ -141,6 +141,23 @@ mcp(action="call", server="mem0", tool="mem0_status", args={})
 - [开发指南](docs/development.md) — 如何扩展和贡献
 - [配置参考](docs/configuration.md) — config.yaml 完整选项
 
+## 学术基础
+
+本系统的设计参考了以下同行评审研究：
+
+| 论文 | 核心洞察 | 本项目的应用 |
+|------|----------|-------------|
+| Hindsight (2512.12818) | 4 网络记忆，91.4% 准确率 | 7 种记忆类型分类 |
+| MAPLE (2602.13258) | HOT/COLD 路径分离 | 白天快速写入（`infer=False`）+ 夜间 Opus 深度处理 |
+| FadeMem (2601.18642) | 基于重要性的衰减，-45% 存储 | Bjork 增强衰减公式 |
+| OWASP ASI06 (2026) | 记忆投毒风险 40%→80% | trust + never_store + scope 隔离 |
+| Bjork (1992) | 存储-检索强度理论 | access_count 抑制衰减 |
+| TierMem (2602.17913) | 来源追踪减少 token | 每条记忆的结构化元数据 |
+
 ## 许可证
 
 MIT — 见 [LICENSE](LICENSE)
+
+## 贡献
+
+欢迎提 Issue 和 PR。请先阅读 [docs/development.md](docs/development.md)。
