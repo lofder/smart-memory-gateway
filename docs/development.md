@@ -3,7 +3,7 @@
 ## Project Structure / 项目结构
 
 ```
-smart-memory-gateway/
+engram/
 ├── src/
 │   ├── server.py           # MCP Server (FastMCP entry point)
 │   ├── maintenance.py      # Maintenance script (daily/weekly/report)
